@@ -3,6 +3,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from main.models import *
@@ -34,15 +35,31 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors,
                         status=status.HTTP_400_BAD_REQUEST)
 
-    #TODO learn how do it
+    #TODO learn how to do it
     @action(detail=False, methods=['post'],url_path='logout')
     def logout(self, request):
-        pass
+        refresh_token = request.data.get('refresh_token')
+        jwt_logout_done = False
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                jwt_logout_done = True
+            except (TokenError, InvalidToken):
+                return Response({'error': 'Invalid refresh token'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.user.is_authenticated and request.session:
+            request.session.flush()
+
+        return Response({'message':'Logged out successfully',
+                         'jwt': jwt_logout_done,
+                         'session': bool(request.session.session_key is None)
+                         },status=status.HTTP_205_RESET_CONTENT)
 
     @action(detail=False, methods=['post'],url_path='register')
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            user = serializer.save()
-            return Response({'message':'User created successfully'},
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response({'message':'User created successfully'},
                             status=status.HTTP_201_CREATED)
