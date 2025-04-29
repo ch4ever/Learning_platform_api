@@ -35,7 +35,7 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors,
                         status=status.HTTP_400_BAD_REQUEST)
 
-    #TODO learn how to do it
+    
     @action(detail=False, methods=['post'],url_path='logout')
     def logout(self, request):
         refresh_token = request.data.get('refresh_token')
