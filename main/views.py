@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -13,8 +13,7 @@ from main.serializers import UserLoginSerializer,UserRegisterSerializer
 # Create your views here.
 class UserSetUpViewSet(viewsets.ModelViewSet):
     queryset = SiteUser.objects.all()
-    serializer_class = UserLoginSerializer
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [JWTAuthentication,SessionAuthentication]
 
     def perform_create(self, serializer):
         serializer.save()
@@ -35,7 +34,7 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors,
                         status=status.HTTP_400_BAD_REQUEST)
 
-    
+
     @action(detail=False, methods=['post'],url_path='logout')
     def logout(self, request):
         refresh_token = request.data.get('refresh_token')
