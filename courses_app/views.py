@@ -1,3 +1,55 @@
-from django.shortcuts import render
+
+from rest_framework import viewsets, status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.decorators import action
+
+from courses_app.models import Course, CourseJoinRequests
+from courses_app.serializers import CourseSerializer
+from main.permissions import *
+
 
 # Create your views here.
+class CourseViewSet(viewsets.ModelViewSet):
+    serializer_class = CourseSerializer
+    authentication_classes = (JWTAuthentication,SessionAuthentication)
+
+#TODO FIX URL
+    @action(detail=True, methods=['get'],url_path='info',permission_classes=[IsAuthenticated])
+    def get_course(self, request, pk):
+        course = Course.objects.get(pk=pk)
+        if not course.check_accessibility(request.user):
+            raise PermissionDenied('You do not have access to this course')
+        serializer = CourseSerializer(course)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'],url_path='create',permission_classes=[IsAuthenticated,TeacherOrAbove])
+    def create_course(self, request):
+        serializer = CourseSerializer(data=request.data,context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'],url_path='request',permission_classes=[IsAuthenticated])
+    def request_to_join_course(self,request,pk):
+        course = get_object_or_404(Course, pk=pk)
+        user = request.user
+        if user.role == 'staff':
+            CourseJoinRequests.objects.create(course=course, user=user, status='approved')
+            return Response({'message': 'Joined successfully'}, )
+        if course.check_accessibility(request.user):
+            course.users.add(user)
+
+        if CourseJoinRequests.objects.filter(course=course, user=user).exists():
+            return Response({'message':'Youre already made a request'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        CourseJoinRequests.objects.create(course=course, user=user)
+        return Response({'message':'Succesfully created request to the course'},
+                        status=status.HTTP_201_CREATED)
+
+    #@action()
+#TODO section open(?)/requests list + confirmation + update title/short_desc/sections(?)

@@ -8,6 +8,18 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields= ('id','owner','title','short_description','created_at','users',)
+        read_only_fields = ('id','owner','created_at','users',)
+
+    def create(self, validated_data):
+        owner = self.context['owner'].user
+        validated_data['owner'] = owner
+        return Course.objects.create(**validated_data)
+
+
+class CourseMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ('id','owner','title','short_description')
 
     def get_users(self, obj):
         return [{

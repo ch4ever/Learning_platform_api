@@ -1,6 +1,18 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 from main.models import SiteUser
+from courses_app.serializers import CourseMiniSerializer
+
+
+class UserSerializer(serializers.ModelSerializer):
+    courses = serializers.SerializerMethodField()
+    class Meta:
+        model = SiteUser
+        fields = ('username', 'role', 'is_staff', 'courses')
+
+    def get_courses(self, obj):
+        courses = obj.courses_users.all()
+        return CourseMiniSerializer(courses, many=True).data
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,8 +1,3 @@
-from email.policy import default
-
-from django.db import models
-
-
 from main.models import *
 
 # Create your models here.
@@ -21,7 +16,14 @@ class Course(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     #learn_sections -->
     def __str__(self):
-        return f"{self.title}  {self.short_description} - {self.user}  - {CourseRoles.course_role}"
+        return f"{self.title}  {self.short_description} - {self.owner}  - {CourseRoles.course_role}"
+
+    def check_accessibility(self,user):
+        if self.course_accessibility == 'public':
+            return True
+        if self.course_accessibility in ['on_invite_only','on_requests']:
+            return self.course_roles.filter(user=user).exists()
+        return False
 
     def re_generate_course_code(self, length=6):
         import random
@@ -34,8 +36,35 @@ class Course(models.Model):
                 self.save(update_fields=['course_code'])
                 return new_code
 
+    @classmethod
+    def accept_user_by_code(cls, user,code):
+        try:
+            course = cls.objects.get(course_code=code)
+        except cls.DoesNotExist:
+            return {'status':False, 'message':'Invalid code'}
+        if course.users.filter(id=user.id).exists():
+            return {'status':False, 'message':'User already joined course with this code'}
+
+        course.users.add(user)
+        course.save()
+        return {'status':True, 'message':'User joined course with this code'}
+
     class Meta:
         ordering = ['created_at']
+
+
+class CourseJoinRequests(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='course_join_requests')
+    user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='course_join_requests')
+    status = models.CharField(choices=[('approved','approved'),
+                                       ('rejected','rejected'),('on_mod','on_mod')],default='on_mod')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        unique_together = ('course', 'user')
+
+
 
 class CourseRoles(models.Model):
     user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='course_roles')
@@ -50,6 +79,7 @@ class CourseRoles(models.Model):
         unique_together = ('user', 'course')
 
 
+
 class CourseSections(models.Model):
     order = models.PositiveIntegerField()
     section_name = models.CharField(max_length=22)
@@ -62,6 +92,11 @@ class CourseSections(models.Model):
         unique_together = ('course','order')
 
 class SectionContent(models.Model):
+    order = models.PositiveIntegerField()
     section = models.ForeignKey(CourseSections, on_delete=models.CASCADE, related_name='section_content')
     title = models.CharField(max_length=22)
     content = models.TextField()
+
+    class Meta:
+        ordering = ['order']
+        unique_together = ('section','order')

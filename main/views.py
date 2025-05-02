@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from rest_framework import viewsets, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -6,11 +7,33 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from courses_app.models import Course
 from main.models import *
-from main.serializers import UserLoginSerializer,UserRegisterSerializer
+from main.serializers import UserLoginSerializer, UserRegisterSerializer, UserSerializer
 
 
 # Create your views here.
+
+class UsersViewset(viewsets.ModelViewSet):
+    queryset = SiteUser.objects.all()
+    serializer_class = UserSerializer
+    authentication_classes = (JWTAuthentication, SessionAuthentication)
+
+#TODO FIX URL
+    @action(detail=True, methods=['get'],url_name='')
+    def UserView(self, request, pk):
+#HARD
+        queryset = SiteUser.objects.prefetch_related(
+            Prefetch('course_users',
+                     queryset=Course.objects.only('id','title','short_description'),
+        )).filter(pk=pk).first()
+        serializer = UserLoginSerializer(queryset, context={'request': request})
+
+        if not queryset:
+            return Response({'error': 'User not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        return Response(serializer.data)
 class UserSetUpViewSet(viewsets.ModelViewSet):
     queryset = SiteUser.objects.all()
     authentication_classes = [JWTAuthentication,SessionAuthentication]
@@ -59,6 +82,6 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        serializer.save()
         return Response({'message':'User created successfully'},
                             status=status.HTTP_201_CREATED)
