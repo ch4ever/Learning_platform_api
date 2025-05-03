@@ -10,16 +10,11 @@ class CourseSerializer(serializers.ModelSerializer):
         fields= ('id','owner','title','short_description','created_at','users',)
         read_only_fields = ('id','owner','created_at','users',)
 
-    def create(self, validated_data):
-        owner = self.context['owner'].user
-        validated_data['owner'] = owner
-        return Course.objects.create(**validated_data)
-
-
-class CourseMiniSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Course
-        fields = ('id','owner','title','short_description')
+    # def validate(self, data):
+    #     user = self.context['request'].user
+    #     if user.role =='teacher' and user.status != 'approved':
+    #         raise serializers.ValidationError('Unapproved teachers cant create courses')
+    #     return data
 
     def get_users(self, obj):
         return [{
@@ -27,6 +22,28 @@ class CourseMiniSerializer(serializers.ModelSerializer):
             'username': u.user.username,
             'role': u.course_role
         } for u in obj.course_roles.select_related('user') ]
+
+    def create(self, validated_data):
+        owner = self.context['request'].user
+        validated_data['owner'] = owner
+        return Course.objects.create(**validated_data)
+
+class CourseSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['title','short_description','course_accessibility','course_code']
+
+    def update(self,validated_data,instance):
+        if validated_data.get('course_code') == 'change':
+            new_code = instance.re_generate_course_code()
+            validated_data['course_code'] = new_code
+        return super().update(instance,validated_data)
+
+class CourseMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ('id','owner','title','short_description')
+
 
 class SectionContentSerializer(serializers.ModelSerializer):
 

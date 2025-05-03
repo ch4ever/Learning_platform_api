@@ -9,7 +9,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
 from courses_app.models import Course, CourseJoinRequests
-from courses_app.serializers import CourseSerializer
+from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer
 from main.permissions import *
 
 
@@ -27,9 +27,10 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = CourseSerializer(course)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'],url_path='create',permission_classes=[IsAuthenticated,TeacherOrAbove])
+    @action(detail=False, methods=['post'],url_path='create',permission_classes=[IsAuthenticated,TeacherOrAbove,VerifiedTeacher])
     def create_course(self, request):
-        serializer = CourseSerializer(data=request.data,context={'request': request})
+        serializer = CourseSerializer(data=request.data,
+                                      context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -51,5 +52,35 @@ class CourseViewSet(viewsets.ModelViewSet):
         return Response({'message':'Succesfully created request to the course'},
                         status=status.HTTP_201_CREATED)
 
-    #@action()
+    @action(detail=True,methods=['get'],url_path='sections/<section_id>',permission_classes=[IsAuthenticated,Student])
+    def get_course_section(self,request,pk,section_id):
+        course = get_object_or_404(Course, pk=pk)
+        sections = course.course_sections.filter(course=course,pk=section_id)
+        serializer = CourseSectionsSerializer(sections)
+        return Response(serializer.data)
+
+    @action(detail=True,methods=['get'],url_path='sections/all',permission_classes=[IsAuthenticated,Student])
+    def get_course_sections(self,request,pk):
+        course = get_object_or_404(Course, pk=pk)
+        sections = course.course_sections.all()
+        serializer = CourseSectionsSerializer(sections)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['put'],url_path='settings',permission_classes=[IsAuthenticated,CoLecturerOrAbove])
+    def course_settings(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+        serializer = CourseSettingsSerializer(course,data=request.data, partial=True)
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True,methods=['delete'],url_path='delete',permission_classes=[IsAuthenticated,LecturerOrAbove])
+    def delete_course(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+        course.delete()
+        return Response({'message':'Course deleted successfully'},)
+
+
+
 #TODO section open(?)/requests list + confirmation + update title/short_desc/sections(?)

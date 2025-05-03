@@ -20,7 +20,7 @@ class UsersViewset(viewsets.ModelViewSet):
     authentication_classes = (JWTAuthentication, SessionAuthentication)
 
 #TODO FIX URL
-    @action(detail=True, methods=['get'],url_name='')
+    @action(detail=True, methods=['get'],url_name='1231')
     def UserView(self, request, pk):
 #HARD
         queryset = SiteUser.objects.prefetch_related(

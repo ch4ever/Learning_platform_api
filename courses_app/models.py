@@ -12,7 +12,7 @@ class Course(models.Model):
     course_accessibility = models.CharField(choices=[
                                 ('public', 'public'),
                                 ('on_invite_only', 'on_invite_only'),
-                                ('on_requests', 'on_requests')  ])
+                                ('on_requests', 'on_requests')],default='public')
     created_at = models.DateTimeField(auto_now_add=True)
     #learn_sections -->
     def __str__(self):
