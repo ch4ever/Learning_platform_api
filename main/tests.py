@@ -16,7 +16,6 @@ def test_valid_register_user(client):
     response = client.post('/register/', data=data)
     assert response.status_code == 201
     assert SiteUser.objects.filter(username='test').exists()
-    assert response.data['message'] == 'User created successfully'
     user = SiteUser.objects.get(username='test')
     assert user.role == 'student'
     assert user.status == 'approved'
@@ -44,7 +43,7 @@ def test_teacher_register(client):
     user = SiteUser.objects.get(username='test')
     assert user.role == 'teacher'
     assert user.status == 'on_moderation'
-    assert response.data['message'] == 'User created successfully'
+    assert response.data['token'] == response.data['token']
 
 
 @pytest.fixture

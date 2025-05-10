@@ -21,4 +21,6 @@ urlpatterns = [
         #path('admin/', admin.site.urls),
         path('', include('main.urls')),
         path('', include('courses_app.urls')),
+        path('', include('student_app.urls')),
+        path('', include('administration.urls')),
 ]

@@ -1,7 +1,7 @@
 from rest_framework import permissions
 from rest_framework.permissions import BasePermission
 
-
+#SITE PERMISSIONS
 class RolePermission(permissions.BasePermission):
     allowed_roles=[]
     def has_permission(self, request, view):
@@ -25,6 +25,8 @@ class VerifiedTeacher(permissions.BasePermission):
 class Staff(RolePermission):
     allowed_roles = ['staff']
 
+
+#COURSE PERMISSIONS
 class CourseRolePermissions(permissions.BasePermission):
     allowed_roles = []
 

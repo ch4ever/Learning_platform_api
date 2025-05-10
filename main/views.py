@@ -20,14 +20,14 @@ class UsersViewset(viewsets.ModelViewSet):
     authentication_classes = (JWTAuthentication, SessionAuthentication)
 
 #TODO FIX URL
-    @action(detail=True, methods=['get'],url_name='1231')
+    @action(detail=True, methods=['get'],url_name='user-info',url_path='info')
     def UserView(self, request, pk):
 #HARD
         queryset = SiteUser.objects.prefetch_related(
             Prefetch('course_users',
                      queryset=Course.objects.only('id','title','short_description'),
         )).filter(pk=pk).first()
-        serializer = UserLoginSerializer(queryset, context={'request': request})
+        serializer = UserSerializer(queryset, context={'request': request})
 
         if not queryset:
             return Response({'error': 'User not found'},
@@ -82,6 +82,12 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({'message':'User created successfully'},
+        user = serializer.save()
+
+        token = RefreshToken.for_user(user)
+
+        return Response({
+                        'user': UserRegisterSerializer(user).data,
+                         'refresh_token':str(token),
+                         'token': str(token.access_token)},
                             status=status.HTTP_201_CREATED)

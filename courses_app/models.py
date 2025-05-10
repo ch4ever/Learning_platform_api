@@ -22,7 +22,8 @@ class Course(models.Model):
         if self.course_accessibility == 'public':
             return True
         if self.course_accessibility in ['on_invite_only','on_requests']:
-            return self.course_roles.filter(user=user).exists()
+            return False
+#return self.course_roles.filter(user=user).exists()
         return False
 
     def re_generate_course_code(self, length=6):
@@ -79,7 +80,6 @@ class CourseRoles(models.Model):
         unique_together = ('user', 'course')
 
 
-
 class CourseSections(models.Model):
     order = models.PositiveIntegerField()
     section_name = models.CharField(max_length=22)
@@ -100,3 +100,13 @@ class SectionContent(models.Model):
     class Meta:
         ordering = ['order']
         unique_together = ('section','order')
+
+class SectionsBookmarks(models.Model):
+    user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='sections_bookmarks')
+    section = models.ForeignKey(CourseSections, on_delete=models.CASCADE, related_name='sections_bookmarks')
+    is_bookmarked = models.BooleanField(default=False)
+    def __str__(self):
+        return f"{self.section.id} - {self.is_bookmarked} - {self.user}"
+
+    class Meta:
+        unique_together = ('user','section')

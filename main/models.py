@@ -12,6 +12,7 @@ class UserManager(BaseUserManager):
     def create_student(self, username, password, **extra_fields):
         extra_fields.setdefault('role', 'student')
         return self.create_user(username=username, password=password, **extra_fields)
+
     def create_teacher(self, username, password, **extra_fields):
         extra_fields.setdefault('role', 'teacher')
         extra_fields.setdefault('status','on_moderation')

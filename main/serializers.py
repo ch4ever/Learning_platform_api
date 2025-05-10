@@ -3,7 +3,7 @@ from rest_framework import serializers
 from main.models import SiteUser
 from courses_app.serializers import CourseMiniSerializer
 
-
+#TODO CHECK
 class UserSerializer(serializers.ModelSerializer):
     courses = serializers.SerializerMethodField()
     class Meta:
@@ -42,13 +42,16 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Invalid role')
 
 class UserLoginSerializer(serializers.Serializer):
-    class Meta:
-        model = SiteUser
-        fields = ('username', 'password')
+    username = serializers.CharField()
+    password = serializers.CharField()
 
     def validate(self, data):
-        username = data['username']
-        password = data['password']
+        username = data.get('username')
+        password = data.get('password')
+        if not username :
+            raise serializers.ValidationError('Username is required')
+        if not password :
+            raise serializers.ValidationError('Password is required')
         user = authenticate(username=username, password=password)
         if user:
             data['user'] =  user

@@ -1,20 +1,14 @@
 from rest_framework import serializers
 
-from courses_app.models import Course, CourseSections, SectionContent
+from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests
 
 
 class CourseSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
     class Meta:
         model = Course
-        fields= ('id','owner','title','short_description','created_at','users',)
+        fields= ('id','owner','title','short_description','created_at','course_accessibility','users',)
         read_only_fields = ('id','owner','created_at','users',)
-
-    # def validate(self, data):
-    #     user = self.context['request'].user
-    #     if user.role =='teacher' and user.status != 'approved':
-    #         raise serializers.ValidationError('Unapproved teachers cant create courses')
-    #     return data
 
     def get_users(self, obj):
         return [{
@@ -27,6 +21,11 @@ class CourseSerializer(serializers.ModelSerializer):
         owner = self.context['request'].user
         validated_data['owner'] = owner
         return Course.objects.create(**validated_data)
+
+class CourseMiniForAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['id','owner','title',]
 
 class CourseSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -53,8 +52,38 @@ class SectionContentSerializer(serializers.ModelSerializer):
 
 class CourseSectionsSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
+    bookmarked = serializers.SerializerMethodField()
     class Meta:
         model = CourseSections
-        fields = ('order','section_name','section_content')
+        fields = ('order','section_name','section_content','bookmarked')
 
+    def get_bookmarked(self,obj):
+        bookmark =  obj.sections_bookmarks.filter(user=self.context['request'].user).exists()
+        return bookmark
+#TODO understand
+class CourseRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CourseJoinRequests
+        fields = []
 
+    def validate(self,attrs):
+        user = self.context['user']
+        course = self.context['course']
+
+        if user.role == 'staff' or course.check_accessibility(user):
+            attrs['approved'] = True
+            return attrs
+
+        if CourseJoinRequests.objects.filter(course=course, user=user).exists():
+            raise serializers.ValidationError({'message':'You\'re already made request to this course'})
+        attrs['approved'] = False
+        return attrs
+
+    def create(self,validated_data):
+        course = self.context['course']
+        user = self.context['user']
+        approved = validated_data['approved']
+        if approved:
+            course.users.add(user)
+            return CourseJoinRequests.objects.create(course=course, user=user, status='approved')
+        return CourseJoinRequests.objects.create(course=course,user=user,status='on_mod')

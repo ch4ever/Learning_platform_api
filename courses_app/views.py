@@ -9,7 +9,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
 from courses_app.models import Course, CourseJoinRequests
-from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer
+from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer, \
+    CourseRequestSerializer
 from main.permissions import *
 
 
@@ -35,22 +36,17 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+#TODO understand
     @action(detail=True, methods=['post'],url_path='request',permission_classes=[IsAuthenticated])
     def request_to_join_course(self,request,pk):
         course = get_object_or_404(Course, pk=pk)
         user = request.user
-        if user.role == 'staff':
-            CourseJoinRequests.objects.create(course=course, user=user, status='approved')
-            return Response({'message': 'Joined successfully'}, )
-        if course.check_accessibility(request.user):
-            course.users.add(user)
-
-        if CourseJoinRequests.objects.filter(course=course, user=user).exists():
-            return Response({'message':'Youre already made a request'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        CourseJoinRequests.objects.create(course=course, user=user)
-        return Response({'message':'Succesfully created request to the course'},
-                        status=status.HTTP_201_CREATED)
+        serializer = CourseRequestSerializer(data=request.data,context={'request': request, 'course': course, 'user': user})
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        if instance.status == 'approved':
+            return Response({'message':'Joined successfully','approved': True}, status=status.HTTP_200_OK)
+        return Response({'message':'Request created','approved': False}, status=status.HTTP_201_CREATED )
 
     @action(detail=True,methods=['get'],url_path='sections/<section_id>',permission_classes=[IsAuthenticated,Student])
     def get_course_section(self,request,pk,section_id):
