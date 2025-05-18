@@ -18,6 +18,7 @@ class Course(models.Model):
     def __str__(self):
         return f"{self.title}  {self.short_description} - {self.owner}  - {CourseRoles.course_role}"
 
+#TODO user???
     def check_accessibility(self,user):
         if self.course_accessibility == 'public':
             return True

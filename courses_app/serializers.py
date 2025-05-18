@@ -23,9 +23,17 @@ class CourseSerializer(serializers.ModelSerializer):
         return Course.objects.create(**validated_data)
 
 class CourseMiniForAdminSerializer(serializers.ModelSerializer):
+    user_role = serializers.SerializerMethodField()
     class Meta:
         model = Course
-        fields = ['id','owner','title',]
+        fields = ['id','owner','title','user_role']
+
+    def get_user_role(self, course):
+        user = self.context.get('target_user')
+        if not user:
+            return None
+        course_role = course.course_roles.filter(user=user).first()
+        return course_role.course_role if course_role else None
 
 class CourseSettingsSerializer(serializers.ModelSerializer):
     class Meta:

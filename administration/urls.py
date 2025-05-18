@@ -5,7 +5,7 @@ from administration import views
 
 router = DefaultRouter()
 
-router.register(r'adm', views.AdministrationViewSet, basename='administration')
 urlpatterns = [
-    path('',include(router.urls))
+    path('adm/users/',views.AdministrationUserList.as_view(), name='administration-user-list'),
+    path('adm/users/<int:pk>/',views.AdminUserInfo.as_view(),name='admin_user_info'),
 ]

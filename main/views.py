@@ -1,11 +1,14 @@
 from django.db.models import Prefetch
+from drf_spectacular.utils import OpenApiResponse,extend_schema
 from rest_framework import viewsets, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+
 
 from courses_app.models import Course
 from main.models import *
@@ -14,14 +17,21 @@ from main.serializers import UserLoginSerializer, UserRegisterSerializer, UserSe
 
 # Create your views here.
 
-class UsersViewset(viewsets.ModelViewSet):
+@extend_schema(
+    summary='UserInfo',
+    request=UserSerializer,
+    responses={
+        200: OpenApiResponse(description='User information in format usr/role/is_staff/courses'),
+        404: OpenApiResponse(description='User not found'),
+    }
+)
+class UserInfoView(APIView):
     queryset = SiteUser.objects.all()
     serializer_class = UserSerializer
     authentication_classes = (JWTAuthentication, SessionAuthentication)
 
 #TODO FIX URL
-    @action(detail=True, methods=['get'],url_name='user-info',url_path='info')
-    def UserView(self, request, pk):
+    def get(self, request, pk):
 #HARD
         queryset = SiteUser.objects.prefetch_related(
             Prefetch('course_users',
@@ -41,6 +51,14 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save()
 
+    @extend_schema(
+        summary="login and return id/username/token/",
+        request=UserLoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login and return id/username/token'),
+            400: OpenApiResponse(description='User not found'),
+        }
+    )
     @action(detail=False, methods=['post'],url_path='login')
     def login(self, request):
         serializer = UserLoginSerializer(data=request.data)
@@ -78,6 +96,16 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
                          'session': bool(request.session.session_key is None)
                          },status=status.HTTP_205_RESET_CONTENT)
 
+    @extend_schema(
+        summary="register",
+        request=UserRegisterSerializer,
+        description="register and return user token",
+        responses={
+            201: OpenApiResponse(description='register success'),
+            400: OpenApiResponse(description='register failed by validation error'),
+
+        }
+    )
     @action(detail=False, methods=['post'],url_path='register')
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
@@ -89,5 +117,4 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
         return Response({
                         'user': UserRegisterSerializer(user).data,
                          'refresh_token':str(token),
-                         'token': str(token.access_token)},
-                            status=status.HTTP_201_CREATED)
+                         'token': str(token.access_token)}, status=status.HTTP_201_CREATED)

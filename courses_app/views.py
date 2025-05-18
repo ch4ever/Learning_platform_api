@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
@@ -15,18 +16,14 @@ from main.permissions import *
 
 
 # Create your views here.
+
+#TODO fix courses/
+
 class CourseViewSet(viewsets.ModelViewSet):
+    queryset = Course.objects.all()
     serializer_class = CourseSerializer
     authentication_classes = (JWTAuthentication,SessionAuthentication)
 
-#TODO FIX URL
-    @action(detail=True, methods=['get'],url_path='info',permission_classes=[IsAuthenticated])
-    def get_course(self, request, pk):
-        course = Course.objects.get(pk=pk)
-        if not course.check_accessibility(request.user):
-            raise PermissionDenied('You do not have access to this course')
-        serializer = CourseSerializer(course)
-        return Response(serializer.data)
 
     @action(detail=False, methods=['post'],url_path='create',permission_classes=[IsAuthenticated,TeacherOrAbove,VerifiedTeacher])
     def create_course(self, request):

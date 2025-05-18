@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework.response import Response
 
 from courses_app.models import Course, SectionsBookmarks
 
@@ -31,3 +30,26 @@ class BookmarkCourseSectionSerializer(serializers.ModelSerializer):
         course = self.context.get('course')
         SectionsBookmarks.objects.create(user=user, course=course, section=section,)
         return {'success': True}
+
+class CodeJoinCourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = []
+    def validate(self, data):
+        code = data.get('code')
+        user = self.context.get('user')
+        try:
+            course = Course.objects.get(course_code=code)
+        except Course.DoesNotExist:
+            return serializers.ValidationError('Course does not exist')
+
+        if course.users.filter(id=user.id).exists():
+            raise serializers.ValidationError('You have already joined this course')
+
+        res = course.check_accessibility(user)
+        if res:
+            course.accept_user_by_code(user, code)
+            return data
+        raise serializers.ValidationError('Error while joining this course')
+
+

@@ -11,17 +11,20 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from courses_app.models import Course, CourseSections, SectionsBookmarks
 from main.permissions import Student
-from student_app.serializers import StudentCourseLeaveSerializer, BookmarkCourseSectionSerializer
+from student_app.serializers import StudentCourseLeaveSerializer, BookmarkCourseSectionSerializer, \
+    CodeJoinCourseSerializer
 
 
 # Create your views here.
 
 #bookmarks+/mark as passed+/leave+/ DONE
-#TODO make url
+#TODO FIX viewset = viewset from course_app then /courses/ get not work
 
 class CourseActionsViewSet(viewsets.ModelViewSet):
     authentication_classes = (TokenAuthentication,JWTAuthentication)
     permission_classes = (IsAuthenticated,)
+
+
 
 
     @action(detail=True, methods=['post'],url_path='leave',permission_classes=[IsAuthenticated,Student])
@@ -44,4 +47,10 @@ class CourseActionsViewSet(viewsets.ModelViewSet):
         return Response({'message':f'Bookmark {'added' if bookmark.is_bookmarked else 'removed'}',
                          'is_bookmarked': f'{bookmark.is_bookmarked}'})
 
-
+    @action(detail=False, methods=['post'],url_path='join-by-code',permission_classes=[IsAuthenticated])
+    def join_by_code(self,request):
+        user = request.user
+        result = CodeJoinCourseSerializer(data=request.data,context={'user':user})
+        if result.is_valid(raise_exception=True):
+            return Response({'message':'You have joined the course'},status=status.HTTP_200_OK)
+        return result.errors
