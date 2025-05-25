@@ -1,3 +1,6 @@
+from typing import Any
+
+from drf_spectacular.utils import extend_schema_serializer, extend_schema_field
 from rest_framework import serializers
 
 from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests
@@ -7,8 +10,9 @@ class CourseSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
     class Meta:
         model = Course
-        fields= ('id','owner','title','short_description','created_at','course_accessibility','users',)
-        read_only_fields = ('id','owner','created_at','users',)
+        fields= ('id','owner','title','short_description','course_code','created_at','course_accessibility','users',)
+        read_only_fields = ('id','created_at','users','owner','course_code')
+
 
     def get_users(self, obj):
         return [{
@@ -40,7 +44,7 @@ class CourseSettingsSerializer(serializers.ModelSerializer):
         model = Course
         fields = ['title','short_description','course_accessibility','course_code']
 
-    def update(self,validated_data,instance):
+    def update(self, instance, validated_data):
         if validated_data.get('course_code') == 'change':
             new_code = instance.re_generate_course_code()
             validated_data['course_code'] = new_code
@@ -56,7 +60,7 @@ class SectionContentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SectionContent
-        fields = ('title','content')
+        fields = ('id','title','content')
 
 class CourseSectionsSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
@@ -68,7 +72,23 @@ class CourseSectionsSerializer(serializers.ModelSerializer):
     def get_bookmarked(self,obj):
         bookmark =  obj.sections_bookmarks.filter(user=self.context['request'].user).exists()
         return bookmark
-#TODO understand
+
+class RequestsToCourseSerializer(serializers.ModelSerializer):
+    user_ = serializers.SerializerMethodField()
+    class Meta:
+        model = CourseJoinRequests
+        fields = ('id','user_')
+        read_only_fields = ('id','user_')
+
+    def get_user_(self,obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'role': obj.user.role
+        }
+
+
+
 class CourseRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CourseJoinRequests
@@ -78,7 +98,7 @@ class CourseRequestSerializer(serializers.ModelSerializer):
         user = self.context['user']
         course = self.context['course']
 
-        if user.role == 'staff' or course.check_accessibility(user):
+        if user.role == 'staff' or course.check_accessibility():
             attrs['approved'] = True
             return attrs
 

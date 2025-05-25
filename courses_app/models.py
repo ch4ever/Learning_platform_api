@@ -18,13 +18,11 @@ class Course(models.Model):
     def __str__(self):
         return f"{self.title}  {self.short_description} - {self.owner}  - {CourseRoles.course_role}"
 
-#TODO user???
-    def check_accessibility(self,user):
+    def check_accessibility(self):
         if self.course_accessibility == 'public':
             return True
         if self.course_accessibility in ['on_invite_only','on_requests']:
             return False
-#return self.course_roles.filter(user=user).exists()
         return False
 
     def re_generate_course_code(self, length=6):
@@ -32,24 +30,26 @@ class Course(models.Model):
         import string
         chars = string.ascii_lowercase + string.digits
         while True:
-            new_code = ''.join(random.choices(chars,k=length))
+            new_code = ''.join(random.choices(chars,k=length)).lower()
             if not Course.objects.filter(course_code=new_code).exists():
                 self.course_code = new_code
                 self.save(update_fields=['course_code'])
                 return new_code
 
-    @classmethod
-    def accept_user_by_code(cls, user,code):
-        try:
-            course = cls.objects.get(course_code=code)
-        except cls.DoesNotExist:
-            return {'status':False, 'message':'Invalid code'}
-        if course.users.filter(id=user.id).exists():
-            return {'status':False, 'message':'User already joined course with this code'}
+    def generate_course_code(self, length=6):
+        import random
+        import string
+        chars = string.ascii_lowercase + string.digits
+        while True:
+            new_code = ''.join(random.choices(chars,k=length)).lower()
+            if not Course.objects.filter(course_code=new_code).exists():
+                return new_code
 
-        course.users.add(user)
-        course.save()
-        return {'status':True, 'message':'User joined course with this code'}
+    def accept_user_by_code(self, user):
+        if self.users.filter(id=user.id).exists():
+            return {'status': True, 'message': 'User already joined course'}
+        self.users.add(user)
+        return {'status': True, 'message': 'Joined'}
 
     class Meta:
         ordering = ['created_at']
@@ -75,7 +75,8 @@ class CourseRoles(models.Model):
         choices=[
             ('student', 'student'),
             ('lecturer', 'lecturer'),
-            ('co_lecturer', 'co_lecturer')],default='student')
+            ('co_lecturer', 'co_lecturer'),
+            ('staff','staff')],default='student')
 
     class Meta:
         unique_together = ('user', 'course')

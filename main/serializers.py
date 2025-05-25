@@ -11,7 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('username', 'role', 'is_staff', 'courses')
 
     def get_courses(self, obj):
-        courses = obj.courses_users.all()
+        courses = obj.course_users.all()
         return CourseMiniSerializer(courses, many=True).data
 
 class UserRegisterSerializer(serializers.ModelSerializer):

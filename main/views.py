@@ -47,9 +47,20 @@ class UserInfoView(APIView):
 class UserSetUpViewSet(viewsets.ModelViewSet):
     queryset = SiteUser.objects.all()
     authentication_classes = [JWTAuthentication,SessionAuthentication]
+    http_method_names = ['post']
 
     def perform_create(self, serializer):
         serializer.save()
+
+    def get_serializer_class(self):
+        if self.action == 'login':
+            return UserLoginSerializer
+        elif self.action == 'register':
+            return UserRegisterSerializer
+        elif self.action == 'logout':
+            #TODO check
+            return None
+        return UserRegisterSerializer
 
     @extend_schema(
         summary="login and return id/username/token/",

@@ -1,6 +1,8 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from courses_app.models import Course, SectionsBookmarks
+from courses_app.utils import assign_role
 
 
 class StudentCourseLeaveSerializer(serializers.Serializer):
@@ -34,22 +36,29 @@ class BookmarkCourseSectionSerializer(serializers.ModelSerializer):
 class CodeJoinCourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
-        fields = []
+        fields = ['course_code']
+        read_only_fields = ('id','course_code')
+
+
     def validate(self, data):
-        code = data.get('code')
+        code = self.context.get('code')
         user = self.context.get('user')
+
+
+        if not code:
+            raise serializers.ValidationError('code is required')
+
         try:
             course = Course.objects.get(course_code=code)
         except Course.DoesNotExist:
-            return serializers.ValidationError('Course does not exist')
+            raise serializers.ValidationError('Incorrect code')
 
         if course.users.filter(id=user.id).exists():
             raise serializers.ValidationError('You have already joined this course')
 
-        res = course.check_accessibility(user)
-        if res:
-            course.accept_user_by_code(user, code)
-            return data
-        raise serializers.ValidationError('Error while joining this course')
+        with transaction.atomic():
+            course.accept_user_by_code(user)
+            assign_role(user, course)
+        return data
 
 

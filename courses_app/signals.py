@@ -1,15 +1,17 @@
-from django.db.models.signals import post_save
+from django.db import transaction
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from courses_app.models import Course, CourseJoinRequests, CourseSections, SectionContent, CourseRoles
+from courses_app.utils import assign_role
 
 
-@receiver(post_save, sender=Course)
-def generate_course_code(sender, instance, created, **kwargs):
-    if created and not instance.course_code:
-        code = Course.re_generate_course_code(instance)
-        instance.course_code = code
-        instance.save()
+#TODO check if work
+@receiver(pre_save, sender=Course)
+def generate_course_code(sender, instance, **kwargs):
+    if not instance.course_code:
+        instance.course_code = instance.generate_course_code()
+
 
 @receiver(post_save, sender=Course)
 def create_section_after_course(sender, instance, created, **kwargs):
@@ -22,16 +24,16 @@ def create_section_after_course(sender, instance, created, **kwargs):
         return
 
 
-#TODO add role on ROLE status
+#TODO add role for user depends on  his role on site or default if < staff
 @receiver(post_save, sender=CourseJoinRequests)
 def add_user_to_course_or_reject(sender, instance, created, **kwargs):
     if instance.status != 'approved':
         return
-    if not instance.course.users.filter(user=instance.user).exists():
-        instance.course.users.add(instance.user)
+    with transaction.atomic():
+        if not instance.course.users.filter(id=instance.user.id).exists():
+            if not instance.course.users.filter(id=instance.user.id).exists():
+                instance.course.users.add(instance.user)
 
-    if not CourseRoles.objects.filter(user=instance.user,course=instance.course).exists():
-        role = 'staff' if instance.user.role == 'staff' else 'student'
-        CourseRoles.objects.create(user=instance.user,course=instance.course,role=role)
+        assign_role(instance.user, instance.course)
 
 
