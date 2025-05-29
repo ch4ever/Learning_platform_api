@@ -6,7 +6,7 @@ from courses_app.models import Course, CourseJoinRequests, CourseSections, Secti
 from courses_app.utils import assign_role
 
 
-#TODO check if work
+
 @receiver(pre_save, sender=Course)
 def generate_course_code(sender, instance, **kwargs):
     if not instance.course_code:
@@ -24,7 +24,7 @@ def create_section_after_course(sender, instance, created, **kwargs):
         return
 
 
-#TODO add role for user depends on  his role on site or default if < staff
+
 @receiver(post_save, sender=CourseJoinRequests)
 def add_user_to_course_or_reject(sender, instance, created, **kwargs):
     if instance.status != 'approved':

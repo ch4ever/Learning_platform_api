@@ -31,7 +31,7 @@ class CourseRolePermissions(permissions.BasePermission):
     allowed_roles = []
 
     def has_object_permission(self, request, view,obj):
-        user_roles =obj.course_roles.filter(user=request.user).values_list('role',flat=True)
+        user_roles =obj.course_roles.filter(user=request.user).values_list('course_role',flat=True)
         return any(role in self.allowed_roles for role in user_roles) or request.user.role in ['staff'] or request.user.is_superuser
 
 

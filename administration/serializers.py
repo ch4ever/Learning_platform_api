@@ -14,14 +14,12 @@ class AdmRoleinCourseSerializer(serializers.ModelSerializer):
         model = Course
         fields = ['id','title','user_role']
 
-
-#TODO check
 class AdminAllUsersSerializer(serializers.ModelSerializer):
     courses = serializers.SerializerMethodField()
     created_courses = serializers.SerializerMethodField()
     class Meta:
         model = SiteUser
-        fields = ['id','username','role','status','courses','created_courses']
+        fields = ['id','username','role','status','is_superuser','courses','created_courses']
 
     def get_courses(self, obj):
         courses = obj.course_users.exclude(owner=obj)

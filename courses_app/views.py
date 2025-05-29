@@ -1,23 +1,24 @@
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
 from rest_framework.authentication import SessionAuthentication
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
-from courses_app.utils import assign_role
-from courses_app.models import Course, SectionsBookmarks, CourseSections, CourseJoinRequests
+from courses_app.utils import assign_role, check_object_permissions
+from courses_app.models import Course, SectionsBookmarks, CourseSections, CourseJoinRequests, SectionContent
 from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer, \
-    CourseRequestSerializer, RequestsToCourseSerializer
+    CourseRequestSerializer, RequestsToCourseSerializer, CourseSectionsGetSerializer, SectionCreateUpdateSerializer, \
+    SectionContentSerializer, SectionContentCreateUpdateSerializer
 from main.permissions import *
 from student_app.serializers import StudentCourseLeaveSerializer, CodeJoinCourseSerializer
 
 
 # Create your views here.
 
-#TODO fix courses/
 
 class CourseViewSet(viewsets.ModelViewSet):
     queryset = Course.objects.all()
@@ -53,26 +54,13 @@ class CourseViewSet(viewsets.ModelViewSet):
             return Response({'message':'Joined successfully','approved': True}, status=status.HTTP_200_OK)
         return Response({'message':'Request created','approved': False}, status=status.HTTP_201_CREATED )
 
-    @extend_schema(
-        parameters=["section_id", str, OpenApiParameter.PATH]
-    )
-    @action(detail=True,methods=['get'],url_path='sections/<section_id>',permission_classes=[IsAuthenticated,Student])
-    def get_course_section(self,request,pk,section_id):
-        course = get_object_or_404(Course, pk=pk)
-        sections = course.course_sections.filter(course=course,pk=section_id)
-        serializer = CourseSectionsSerializer(sections)
-        return Response(serializer.data)
-
-    @action(detail=True,methods=['get'],url_path='sections/all',permission_classes=[IsAuthenticated,Student])
-    def get_course_sections(self,request,pk):
-        course = get_object_or_404(Course, pk=pk)
-        sections = course.course_sections.all()
-        serializer = CourseSectionsSerializer(sections)
-        return Response(serializer.data)
 
     @action(detail=True, methods=['put'],url_path='settings',permission_classes=[IsAuthenticated,CoLecturerOrAbove])
     def course_settings(self, request, pk):
         course = get_object_or_404(Course, pk=pk)
+
+        check_object_permissions(self,request, course)
+
         serializer = CourseSettingsSerializer(course,data=request.data, partial=True)
         if serializer.is_valid(raise_exception=True):
             serializer.save()
@@ -98,6 +86,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         if result.is_valid(raise_exception=True):
             return Response({'message': 'You have joined the course'}, status=status.HTTP_200_OK)
         return result.errors
+
     #TODO mb rewrite for celery async
     @action(detail=True,methods=['get','post'],url_path='requests',permission_classes=[IsAuthenticated,CoLecturerOrAbove])
     def manage_requests(self, request, pk):
@@ -133,5 +122,107 @@ class CourseViewSet(viewsets.ModelViewSet):
                 return Response({'message':'Rejected successfully'},status=status.HTTP_200_OK)
             return Response({'error':'Unknown error'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    #@action(detail=True,methods=['create'])
 
-#TODO section open(?)/requests list + confirmation + update title/short_desc/sections(?)
+    #TODO Do i need dis?
+    @extend_schema(
+        parameters=["section_id", str, OpenApiParameter.PATH]
+    )
+    @action(detail=True, methods=['get'], url_path='sections/<section_id>',
+            permission_classes=[IsAuthenticated, Student])
+    def get_course_section(self, request, pk, section_id):
+        course = get_object_or_404(Course, pk=pk)
+        sections = course.course_sections.filter(course=course, pk=section_id)
+        serializer = CourseSectionsSerializer(sections, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get','post','delete','patch'], url_path='sections', permission_classes=[IsAuthenticated, Student])
+    def get_course_sections(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+        if request.method == 'GET':
+            if not Student().has_object_permission(request,self,course):
+                raise PermissionDenied("Only CourseStudent can see sections")
+            block = request.query_params.get('block')
+            if block is not None:
+                try:
+                    block_order = int(request.query_params.get('block'))
+                except (ValueError, TypeError):
+                    return Response({'error': 'Invalid block'}, status=status.HTTP_400_BAD_REQUEST)
+
+                if block_order is not None:
+                    block_ = course.course_sections.filter(order=block_order)
+                    if not block_.exists():
+                        return Response({'error': 'Section block does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+                    serializer = CourseSectionsSerializer(block_, many=True, context={'user': request.user})
+                    return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                sections = course.course_sections.all()
+                serializer = CourseSectionsSerializer(sections, many=True, context={'user': request.user})
+                return Response(serializer.data)
+        if request.method in ['POST', 'PATCH', 'DELETE']:
+            if not CoLecturerOrAbove().has_object_permission(request,self,course):
+                raise PermissionDenied("Only CoLecturers and owner can redact sections")
+
+        if request.method == 'POST':
+            serializer = SectionCreateUpdateSerializer(data=request.data,context={'course': course})
+            serializer.is_valid(raise_exception=True)
+            section = serializer.save()
+            output_serializer = CourseSectionsGetSerializer(section,)
+            return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+        #TODO Check and rewrite for query_param and block/section_block deletion
+        if request.method == 'DELETE':
+            block = request.query_params.get('block')
+            section_block = request.query_params.get('section_block')
+
+            try:
+                block = int(block)
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid block'}, status=status.HTTP_400_BAD_REQUEST)
+
+            section = get_object_or_404(CourseSections, order=block, course=course)
+            if section_block:
+                try:
+                    section_block = int(section_block)
+                except (ValueError, TypeError):
+                    return Response({'error': 'Invalid block'}, status=status.HTTP_400_BAD_REQUEST)
+
+                content_block = SectionContent.objects.filter(order=section_block, section=section)
+                if not content_block.exists():
+                    return Response({'error': 'Section block does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+                content_block.delete()
+                output_serializer = CourseSectionsGetSerializer(section)
+                return Response(output_serializer.data, status=status.HTTP_204_NO_CONTENT)
+            else:
+                section.delete()
+                return Response({'message':'Section has been deleted'}, status=status.HTTP_204_NO_CONTENT)
+
+        if request.method == 'PATCH':
+            block = request.query_params.get('block')
+            section_block = request.query_params.get('section_block')
+            try:
+                block = int(block)
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid block'}, status=status.HTTP_400_BAD_REQUEST)
+            if section_block is None:
+                section = get_object_or_404(CourseSections, order=block)
+                serializer = SectionCreateUpdateSerializer(section, data=request.data,partial=True, )
+                serializer.is_valid(raise_exception=True)
+                section = serializer.save()
+                output = CourseSectionsGetSerializer(section)
+                return Response(output.data, status=status.HTTP_200_OK)
+            else:
+                section_block = int(section_block)
+                section = get_object_or_404(CourseSections, order=block)
+                section_block_ = get_object_or_404(SectionContent,section=section, order=section_block)
+                serializer = SectionContentCreateUpdateSerializer(section_block_,data=request.data,partial=True,)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                output = CourseSectionsGetSerializer(section)
+                return Response(output.data, status=status.HTTP_200_OK)
+
+
+
+#TODO section block add and block swaps
+
+#TODO section open(+)/requests list(+) + confirmation(+) + update title/short_desc/sections(+)
+

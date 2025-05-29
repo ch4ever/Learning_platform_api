@@ -30,9 +30,8 @@ class UserInfoView(APIView):
     serializer_class = UserSerializer
     authentication_classes = (JWTAuthentication, SessionAuthentication)
 
-#TODO FIX URL
     def get(self, request, pk):
-#HARD
+        #HARD
         queryset = SiteUser.objects.prefetch_related(
             Prefetch('course_users',
                      queryset=Course.objects.only('id','title','short_description'),

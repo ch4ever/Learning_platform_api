@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.db import transaction
 from drf_spectacular.utils import extend_schema_serializer, extend_schema_field
 from rest_framework import serializers
 
@@ -60,7 +61,17 @@ class SectionContentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SectionContent
-        fields = ('id','title','content')
+        fields = ('order','title','content')
+
+#TODO bookmarks needed?
+class CourseSectionsGetSerializer(serializers.ModelSerializer):
+    section_content = SectionContentSerializer(many=True, read_only=True)
+    #bookmarked = serializers.SerializerMethodField()
+    class Meta:
+        model = CourseSections
+        fields = ('order','section_name','section_content')
+
+
 
 class CourseSectionsSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
@@ -70,8 +81,43 @@ class CourseSectionsSerializer(serializers.ModelSerializer):
         fields = ('order','section_name','section_content','bookmarked')
 
     def get_bookmarked(self,obj):
-        bookmark =  obj.sections_bookmarks.filter(user=self.context['request'].user).exists()
+        bookmark =  obj.sections_bookmarks.filter(user=self.context.get('user')).exists()
         return bookmark
+
+class SectionCreateUpdateSerializer(serializers.ModelSerializer):
+    section_name = serializers.CharField(required=False)
+    class Meta:
+        model = CourseSections
+        fields = ('section_name',)
+
+    def create(self, validated_data):
+        course = self.context['course']
+        order = CourseSections.objects.filter(course=course,).count() + 1
+        section_name_ = validated_data.get('section_name')
+        if not section_name_:
+            section_name_ = 'Section1'
+
+        section = CourseSections.objects.create(
+            course=course,section_name=section_name_,order=order,)
+
+        SectionContent.objects.create(section=section,order=1,title='block1',content='content1')
+
+    def update(self, instance,validated_data):
+        instance.section_name = validated_data.get('section_name',instance.section_name)
+        instance.save()
+        return instance
+
+class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SectionContent
+        fields = ('title','content')
+
+    def update(self, instance,validated_data):
+        with transaction.atomic():
+            instance.title = validated_data.get('title',instance.title)
+            instance.content = validated_data.get('content',instance.content)
+        instance.save()
+        return instance
 
 class RequestsToCourseSerializer(serializers.ModelSerializer):
     user_ = serializers.SerializerMethodField()
@@ -86,7 +132,6 @@ class RequestsToCourseSerializer(serializers.ModelSerializer):
             'username': obj.user.username,
             'role': obj.user.role
         }
-
 
 
 class CourseRequestSerializer(serializers.ModelSerializer):
