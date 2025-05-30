@@ -1,10 +1,12 @@
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
@@ -67,6 +69,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+#TODO check if work
     @action(detail=True, methods=['post'], url_path='bookmark', permission_classes=[IsAuthenticated, Student])
     def invert_bookmark(self, request, pk=None, section_id=None):
         course = get_object_or_404(Course, pk=pk)
@@ -156,7 +159,7 @@ class CourseViewSet(viewsets.ModelViewSet):
                     serializer = CourseSectionsSerializer(block_, many=True, context={'user': request.user})
                     return Response(serializer.data, status=status.HTTP_200_OK)
             else:
-                sections = course.course_sections.all()
+                sections = course.course_sections.select_related('course')
                 serializer = CourseSectionsSerializer(sections, many=True, context={'user': request.user})
                 return Response(serializer.data)
         if request.method in ['POST', 'PATCH', 'DELETE']:
@@ -169,6 +172,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             section = serializer.save()
             output_serializer = CourseSectionsGetSerializer(section,)
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
         #TODO Check and rewrite for query_param and block/section_block deletion
         if request.method == 'DELETE':
             block = request.query_params.get('block')
@@ -220,8 +224,102 @@ class CourseViewSet(viewsets.ModelViewSet):
                 output = CourseSectionsGetSerializer(section)
                 return Response(output.data, status=status.HTTP_200_OK)
 
+#TESTED
+class SectionBlockCreate(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated,CoLecturerOrAbove]
+
+    def post(self, request,pk ,*args, **kwargs):
+        course = get_object_or_404(Course, pk=pk)
+        section = request.data.get('section')
+
+        serializer = SectionContentCreateUpdateSerializer(data=request.data,context={'course': course,'section': section})
+        serializer.is_valid(raise_exception=True)
+        new_block = serializer.save()
+        output = SectionContentSerializer(new_block)
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+#TODO rewrite like blocks
+class SectionsSwap(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated,CoLecturerOrAbove]
+
+    def post(self, request,pk ,*args, **kwargs):
+        course = get_object_or_404(Course, pk=pk)
+
+        from_section = request.data.get('from_section')
+        to_section = request.data.get('to_section')
+
+        try:
+            from_section = int(from_section)
+            to_section = int(to_section)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid sections(order)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            section_1 = course.course_sections.get(order=from_section)
+            section_2 = course.course_sections.get(order=to_section)
+        except CourseSections.DoesNotExist:
+            return Response({'error': 'Sections not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+
+            section_1.order = 999
+            section_1.save()
+
+            section_2.order = from_section
+            section_2.save()
+
+            section_1.order = to_section
+            section_1.save()
 
 
+        output_serializer = CourseSectionsGetSerializer([section_2,section_1],many=True)
+        return Response(output_serializer.data, status=status.HTTP_200_OK)
+
+class SectionBlockSwap(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated,CoLecturerOrAbove]
+
+    def post(self,request,pk ,*args, **kwargs):
+        course = get_object_or_404(Course, pk=pk)
+        try:
+            section = int(request.data.get('section'))
+            from_block = int(request.data.get('from_block'))
+            to_block = int(request.data.get('to_block'))
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid request data'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if from_block == to_block:
+            raise ValidationError('You can\'t swap between same blocks')
+
+        try:
+            section_ = course.course_sections.get(order=section)
+        except CourseSections.DoesNotExist:
+            return Response({'error': 'Section not found'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            block_from = SectionContent.objects.get(order=from_block,section=section_)
+            block_to = SectionContent.objects.get(order=to_block,section=section_)
+        except SectionContent.DoesNotExist:
+            return Response({'error': 'Blocks not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        with transaction.atomic():
+            block1 = block_from.order
+            block2 = block_to.order
+
+            block_from.order = 999
+            block_from.save()
+
+            block_to.order = block1
+            block_to.save()
+
+            block_from.order = block2
+            block_from.save()
+
+                            #CourseSectionsGetSerializer
+        output_serializer = SectionContentSerializer([block_to,block_from],many=True)
+        return Response(output_serializer.data, status=status.HTTP_200_OK)
 #TODO section block add and block swaps
 
 #TODO section open(+)/requests list(+) + confirmation(+) + update title/short_desc/sections(+)

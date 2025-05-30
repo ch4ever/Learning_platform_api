@@ -66,7 +66,6 @@ class SectionContentSerializer(serializers.ModelSerializer):
 #TODO bookmarks needed?
 class CourseSectionsGetSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
-    #bookmarked = serializers.SerializerMethodField()
     class Meta:
         model = CourseSections
         fields = ('order','section_name','section_content')
@@ -101,6 +100,7 @@ class SectionCreateUpdateSerializer(serializers.ModelSerializer):
             course=course,section_name=section_name_,order=order,)
 
         SectionContent.objects.create(section=section,order=1,title='block1',content='content1')
+        return section
 
     def update(self, instance,validated_data):
         instance.section_name = validated_data.get('section_name',instance.section_name)
@@ -108,9 +108,26 @@ class SectionCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
+    section_= serializers.IntegerField(write_only=True)
     class Meta:
         model = SectionContent
-        fields = ('title','content')
+        fields = ('section_', 'title', 'content')
+
+
+    def create(self, validated_data):
+        section_ = validated_data.pop('section_')
+        course = self.context['course']
+
+        try:
+            section = course.course_sections.get(order=section_)
+        except CourseSections.DoesNotExist:
+            raise serializers.ValidationError('Section does not exist')
+        block_order = SectionContent.objects.filter(section=section).count() + 1
+        validated_data['order'] = block_order
+
+        return SectionContent.objects.create(section=section, **validated_data)
+
+
 
     def update(self, instance,validated_data):
         with transaction.atomic():
