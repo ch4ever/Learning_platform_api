@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import action
 
+from Learning_platform.tasks import change_request_status_and_add
 from courses_app.utils import assign_role, check_object_permissions
 from courses_app.models import Course, SectionsBookmarks, CourseSections, CourseJoinRequests, SectionContent
 from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer, \
@@ -18,8 +19,6 @@ from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, 
 from main.permissions import *
 from student_app.serializers import StudentCourseLeaveSerializer, CodeJoinCourseSerializer
 
-
-# Create your views here.
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -90,13 +89,14 @@ class CourseViewSet(viewsets.ModelViewSet):
             return Response({'message': 'You have joined the course'}, status=status.HTTP_200_OK)
         return result.errors
 
-    #TODO mb rewrite for celery async
+
     @action(detail=True,methods=['get','post'],url_path='requests',permission_classes=[IsAuthenticated,CoLecturerOrAbove])
     def manage_requests(self, request, pk):
         if request.method == 'GET':
             requests = CourseJoinRequests.objects.filter(course_id=pk,status='on_mod')
             serializer = RequestsToCourseSerializer(requests,many=True,)
             return Response(serializer.data, status=status.HTTP_200_OK)
+
         if request.method == 'POST':
             request_id = request.data.get('request_id')
             new_status = request.data.get('new_status')
@@ -109,25 +109,18 @@ class CourseViewSet(viewsets.ModelViewSet):
 
             req = get_object_or_404(CourseJoinRequests, pk=request_id)
 
+            if req.course.id != pk:
+                return Response({'error':"Course id doesn't match"},status=status.HTTP_400_BAD_REQUEST)
+
             if req.course.users.filter(id=req.user.id).exists():
                 return Response({'message': 'User already in course'}, status=status.HTTP_400_BAD_REQUEST)
 
-            if new_status == 'approved':
-                course = req.course
-                user = req.user
-                req.status = new_status
-                req.save()
-                course.users.add(user)
-                return Response({'message':'Joined successfully','request_id': request_id},status=status.HTTP_200_OK)
-            if new_status == 'rejected':
-                req.status = 'rejected'
-                req.save()
-                return Response({'message':'Rejected successfully'},status=status.HTTP_200_OK)
-            return Response({'error':'Unknown error'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            change_request_status_and_add(request_id, new_status).delay()
 
-    #@action(detail=True,methods=['create'])
+            return Response({'message': f"Task to {new_status} request has been accepted"}, status=status.HTTP_202_ACCEPTED)
 
-    #TODO Do i need dis?
+
+
     @extend_schema(
         parameters=["section_id", str, OpenApiParameter.PATH]
     )
@@ -173,7 +166,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             output_serializer = CourseSectionsGetSerializer(section,)
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
-        #TODO Check and rewrite for query_param and block/section_block deletion
+
         if request.method == 'DELETE':
             block = request.query_params.get('block')
             section_block = request.query_params.get('section_block')
@@ -239,7 +232,7 @@ class SectionBlockCreate(APIView):
         output = SectionContentSerializer(new_block)
         return Response(output.data, status=status.HTTP_201_CREATED)
 
-#TODO rewrite like blocks
+
 class SectionsSwap(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated,CoLecturerOrAbove]
@@ -317,10 +310,9 @@ class SectionBlockSwap(APIView):
             block_from.order = block2
             block_from.save()
 
-                            #CourseSectionsGetSerializer
         output_serializer = SectionContentSerializer([block_to,block_from],many=True)
         return Response(output_serializer.data, status=status.HTTP_200_OK)
-#TODO section block add and block swaps
 
-#TODO section open(+)/requests list(+) + confirmation(+) + update title/short_desc/sections(+)
+
+
 

@@ -1,0 +1,9 @@
+Django~=5.2
+djangorestframework~=3.16.0
+pytest~=8.3.5
+drf-spectacular~=0.28.0
+celery~=5.5.2
+dotenv~=0.9.9
+python-dotenv~=1.1.0
+djangorestframework-simplejwt~=5.5.0
+psycopg2-binary~=2.9.9

@@ -12,13 +12,15 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os.path
+
+import dotenv
 from dotenv import load_dotenv
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-dotenv_path = BASE_DIR / ('.env.docker' if os.getenv('DOCKER')=='1' else '.env.local')
+dotenv_path = BASE_DIR / ('.env' if os.getenv('DOCKER')=='1' else '.env.local')
 load_dotenv(dotenv_path=dotenv_path)
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -29,7 +31,7 @@ SECRET_KEY = 'django-insecure-*xx7*f8a)61l=f$hat6zl9d5rqscy#7el3elbdxoqny&4mhi@(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -43,6 +45,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
+
     'student_app',
     'main',
     'courses_app',
@@ -120,6 +123,14 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+broker_user = os.getenv('BROKER_USER')
+broker_password = os.getenv('BROKER_PASSWORD')
+broker_url = os.getenv('BROKER_URL')
+
+CELERY_BROKER_URL = f'amqp://{broker_user}:{broker_password}@{broker_url}:5672/'
+CELERY_RESULT_BACKEND = f'rpc://'
+
 
 AUTH_USER_MODEL = 'main.SiteUser'
 

@@ -24,6 +24,12 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('role', 'staff')
         return self.create_user(username=username, password=password, **extra_fields)
 
+    # def create_superuser(self, username, password, **extra_fields):
+    #     extra_fields.setdefault('is_staff', True)
+    #     extra_fields.setdefault('is_superuser', True)
+    #     extra_fields.setdefault('role', 'staff')
+    #     return self.create_user(username=username, password=password, **extra_fields)
+
 
 class SiteUser(AbstractBaseUser):
     username = models.CharField('username', max_length=15, unique=True)

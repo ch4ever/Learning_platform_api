@@ -5,9 +5,7 @@ from courses_app.serializers import CourseSerializer, CourseMiniForAdminSerializ
 from main.models import SiteUser
 
 
-#TODO TEACHER + allcourses + roles + status(approved/not)  ->>> Teacher approve
 
-#TODO mb get_course_role?
 class AdmRoleinCourseSerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     class Meta:
