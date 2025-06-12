@@ -16,20 +16,19 @@ from main.models import SiteUser
 from main.permissions import Staff
 
 
-
-@extend_schema(
-    summary='user-list for administration',
-    operation_id="adm-user-list",
-    responses={
-        200: OpenApiResponse(description='User list'),
-        403: OpenApiResponse(description='NonAdmin request'),
-    }
-)
 class AdministrationUserList(APIView):
     authentication_classes = (JWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated, Staff)
 
     #adm/users/
+    @extend_schema(
+        summary='user-list for administration',
+        operation_id="adm-user-list",
+        responses={
+            200: OpenApiResponse(description='User list'),
+            403: OpenApiResponse(description='NonAdmin request'),
+        }
+    )
     def get(self, request):
         # ?role={role}
         queryset = SiteUser.objects.all()
@@ -42,25 +41,26 @@ class AdministrationUserList(APIView):
         users = AdminAllUsersSerializer(queryset, many=True)
         return Response(users.data)
 
-
-@extend_schema(
-    summary='user-detail for administration',
-    request=AdminTeacherApproveSerializer,
-    operation_id="adm-user-retrieve",
-    responses={
-        200: OpenApiResponse(description='User detail/teacher approval'),
-        403: OpenApiResponse(description='NonAdmin request'),
-        204: OpenApiResponse(description='User deleted/not found'),
-    })
 class AdminUserInfo(APIView):
     permission_classes = (IsAuthenticated, Staff)
     authentication_classes = (JWTAuthentication, SessionAuthentication)
-    #TODO CHECK IF IT WORK
+
+    @extend_schema(
+        summary="Get user info",
+        responses={200: AdminAllUsersSerializer, 404: OpenApiResponse(description='User not found')},
+    )
     def get(self, request,pk):
         user = get_object_or_404(SiteUser, pk=pk)
         serializer = AdminAllUsersSerializer(user)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Approve teacher / edit user",
+        request=AdminTeacherApproveSerializer,
+        responses={
+            200: AdminTeacherApproveSerializer,
+            400: OpenApiResponse(description='Bad Request')
+        })
     def patch(self,request,pk):
         user = get_object_or_404(SiteUser, pk=pk)
         serializer = AdminTeacherApproveSerializer(user,data=request.data,partial=True)
@@ -69,6 +69,12 @@ class AdminUserInfo(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        summary="Delete user",
+        responses={
+            204: OpenApiResponse(description='User deleted'),
+            404: OpenApiResponse(description='User not found')
+        })
     def delete(self,request,pk):
         user = get_object_or_404(SiteUser, pk=pk)
         if user:
@@ -81,7 +87,7 @@ class AdminUserInfo(APIView):
 class AdmCourseGetRedact(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated, Staff)
     authentication_classes = (JWTAuthentication, SessionAuthentication)
-    get_serializer_class = AdminCourseSerializer
+    serializer_class = AdminCourseSerializer
     queryset = Course.objects.all()
 
     def get_course(self,pk):

@@ -96,6 +96,8 @@ class CourseSections(models.Model):
 class SectionContent(models.Model):
     order = models.PositiveIntegerField()
     section = models.ForeignKey(CourseSections, on_delete=models.CASCADE, related_name='section_content')
+    content_type = models.CharField(choices=[('lection','lection'),
+                                             ('test','test')],default='lection')
     title = models.CharField(max_length=22)
     content = models.TextField()
 
@@ -103,6 +105,40 @@ class SectionContent(models.Model):
         ordering = ['order']
         unique_together = ('section','order')
 
+
+class TestBlock(models.Model):
+    order = models.PositiveIntegerField()
+    section = models.ForeignKey(SectionContent, on_delete=models.CASCADE, related_name='tests')
+    test_title = models.CharField(max_length=22)
+    test_description = models.TextField()
+    class Meta:
+        ordering = ['order']
+        unique_together = ('section', 'order')
+
+
+class TestQuestions(models.Model):
+    order = models.PositiveIntegerField()
+    test_block = models.ForeignKey(TestBlock, on_delete=models.CASCADE, related_name='test_block')
+    test_question = models.TextField()
+    test_answers_type = models.CharField(choices=[('single','single'),
+                                                  ('multiple','multiple')],default='single')
+    max_points = models.IntegerField(default=1)
+
+    class Meta:
+        ordering = ['order']
+
+
+class TestAnswers(models.Model):
+    order = models.PositiveIntegerField()
+    test = models.ForeignKey(TestQuestions, on_delete=models.CASCADE, related_name='test_answers')
+    answer_text = models.TextField()
+    is_correct = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = ('test','order')
+
+#TODO check if work
 class SectionsBookmarks(models.Model):
     user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='sections_bookmarks')
     section = models.ForeignKey(CourseSections, on_delete=models.CASCADE, related_name='sections_bookmarks')
@@ -112,3 +148,4 @@ class SectionsBookmarks(models.Model):
 
     class Meta:
         unique_together = ('user','section')
+

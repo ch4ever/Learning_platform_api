@@ -29,10 +29,11 @@ class AdminAllUsersSerializer(serializers.ModelSerializer):
         return CourseMiniForAdminSerializer(course, many=True).data
 
 class AdminTeacherApproveSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source='user_role',required=False)
     class Meta:
         model = SiteUser
         fields = ['username','role','status']
-        read_only_fields = ['username','role']
+        read_only_fields = ['username',]
 
 class AdminCourseUserSerializer(serializers.ModelSerializer):
     course_role = serializers.SerializerMethodField()

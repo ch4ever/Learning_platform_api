@@ -13,3 +13,7 @@ def check_object_permissions(view, request, obj):
         if hasattr(permission, 'has_object_permission'):
             if not permission.has_object_permission(request, view, obj):
                 raise PermissionDenied("You do not have permission to perform this action")
+
+def assign_order(section):
+    last = section.block_tests.order_by('-order').first()
+    return last.order + 1 if last else 1

@@ -21,7 +21,7 @@ def create_section_after_course(sender, instance, created, **kwargs):
         section = CourseSections.objects.create(course=instance,section_number='section1',order=1)
         SectionContent.objects.create(course=instance,section=section,title='block1',content='block1')
     except Exception as e:
-        return
+        return  f"Error occurred: {str(e)}"
 
 
 

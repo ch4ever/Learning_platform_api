@@ -1,6 +1,6 @@
 from django.db.models import Prefetch
 from drf_spectacular.utils import OpenApiResponse,extend_schema
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -43,7 +43,10 @@ class UserInfoView(APIView):
                             status=status.HTTP_404_NOT_FOUND)
 
         return Response(serializer.data)
-class UserSetUpViewSet(viewsets.ModelViewSet):
+
+
+
+class UserSetUpViewSet(viewsets.ViewSet):
     queryset = SiteUser.objects.all()
     authentication_classes = [JWTAuthentication,SessionAuthentication]
     http_method_names = ['post']
@@ -57,8 +60,8 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
         elif self.action == 'register':
             return UserRegisterSerializer
         elif self.action == 'logout':
-            #TODO check
-            return None
+            return serializers.Serializer
+
         return UserRegisterSerializer
 
     @extend_schema(
@@ -86,7 +89,7 @@ class UserSetUpViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST)
 
 
-    @action(detail=False, methods=['post'],url_path='logout')
+    @action(detail=False, methods=['post'], url_path='logout')
     def logout(self, request):
         refresh_token = request.data.get('refresh_token')
         jwt_logout_done = False
