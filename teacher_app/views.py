@@ -64,7 +64,7 @@ class SectionBlockCreate(APIView):
         new_block = serializer.save()
         output = SectionContentSerializer(new_block)
         return Response(output.data, status=status.HTTP_201_CREATED)
-
+#NOT WORK YET
 class TestViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated, CoLecturerOrAbove)
     authentication_classes = (JWTAuthentication,)

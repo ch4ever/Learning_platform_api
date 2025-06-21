@@ -361,7 +361,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     #TODO fix creation of tests/lections + NEED TESTS
-
+    #NOT WORK YET
     @extend_schema(summary='Create section block',
                    request=SectionContentCreateUpdateSerializer,
                    responses={200: SectionContentSerializer, 400: OpenApiResponse(description='error message'), 404: OpenApiResponse(description='')},
