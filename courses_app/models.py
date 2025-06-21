@@ -59,7 +59,8 @@ class CourseJoinRequests(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='course_join_requests')
     user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='course_join_requests')
     status = models.CharField(choices=[('approved','approved'),
-                                       ('rejected','rejected'),('on_mod','on_mod')],default='on_mod')
+                                       ('rejected','rejected'),('on_mod','on_mod'),
+                                       ('not_active','not_active')],default='on_mod')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -138,7 +139,7 @@ class TestAnswers(models.Model):
         ordering = ['order']
         unique_together = ('test','order')
 
-#TODO check if work
+
 class SectionsBookmarks(models.Model):
     user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='sections_bookmarks')
     section = models.ForeignKey(CourseSections, on_delete=models.CASCADE, related_name='sections_bookmarks')

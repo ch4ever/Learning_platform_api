@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from courses_app.models import TestQuestions, TestAnswers
-from courses_app.utils import assign_order
+from courses_app.utils import assign_order, validate_answers
 
 
 class TestAnswerSerializer(serializers.ModelSerializer):
@@ -22,12 +22,18 @@ class RawTestSerializer(serializers.ModelSerializer):
         model = TestQuestions
         fields = ['order','test_question','test_answers']
 
-#TODO mb this for test_answers patch
+
 class TestAnswersCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestAnswers
-        fields = ['order','answer_text','is_correct']
+        fields = ['id', 'order','answer_text','is_correct']
 
+    def validate_answer_text(self, value):
+        if not value or len(value.strip()) < 0:
+            raise ValidationError('Answer text cannot be empty')
+        return value
+
+#TODO DoBUILD
 class TestCreateUpdateSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(required=False)
     test_answers = TestAnswersCreateSerializer(many=True)
@@ -35,24 +41,42 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
         model = TestQuestions
         fields = ['order','test_answers_type','max_points','test_question','test_answers']
 
+    def validate(self, data):
+        if len(data.get('test_question')) < 2:
+            raise ValidationError('Test question is too short')
+
+        answers = data.get('test_answers', [])
+        answers_type = data.get('test_answers_type')
+
+        if not answers or len(answers) < 2:
+            raise ValidationError('Test should have at least 2 answers')
+
+        correct_answers = [a for a in answers if a.get('is_correct')]
+
+        if answers_type not in ['single', 'multiple']:
+            raise ValidationError('Test answers type')
+        if answers_type == 'single' and len(correct_answers) != 1 :
+            raise ValidationError('Single-type question must have exactly one correct answer')
+            #data['test_answers_type'] = 'multiple'
+        return data
+
     def create(self, validated_data):
-        section = self.context.get('section')
         answers_data = validated_data.pop('test_answers')
+        test = self.context.get('test')
 
-        if len(validated_data.get('test_question')) <= 2:
-            raise ValidationError('Test question cannot be empty')
-        if not 'order' in validated_data:
-            validated_data['order'] = assign_order(section)
+        if not test:
+            raise ValidationError('Test block not found')
+
+        if not validated_data.get('order') or validated_data['order'] is None:
+            validated_data['order'] = TestQuestions.objects.filter(test_block=test).count()+1
+
         with transaction.atomic():
-            test = TestQuestions.objects.create(section=section,**validated_data)
-            if answers_data:
-                for answer in answers_data:
-                    TestAnswers.objects.create(test=test, **answer)
-            else:
-                TestAnswers.objects.create(test=test, answer_text='question', is_correct=True)
-        return test
+            question = TestQuestions.objects.create(test_block=test,**validated_data)
+            for answer_data in answers_data:
+                TestAnswers.objects.create(test=question,**answer_data)
+        return question
 
-#TODO understand
+#TODO understand + validation of questions
     @transaction.atomic
     def update(self, instance, validated_data):
         answers_data = validated_data.pop('test_answers', [])
@@ -81,3 +105,4 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
             if order not in orders:
                 answer.delete()
         return instance
+

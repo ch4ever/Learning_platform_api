@@ -2,8 +2,10 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.fields import SerializerMethodField
 
-from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests, TestQuestions, TestBlock
+from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests, TestQuestions, TestBlock, \
+    CourseRoles
 from courses_app.utils import assign_order
+from main.models import SiteUser
 from teacher_app.serializers import TestAnswerSerializer
 
 
@@ -11,9 +13,8 @@ class CourseSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
     class Meta:
         model = Course
-        fields= ('id','owner','title','short_description','course_code','created_at','course_accessibility','users',)
-        read_only_fields = ('id','created_at','users','owner','course_code')
-
+        fields= ('id','owner','title','short_description','created_at','course_accessibility','users',)
+        read_only_fields = ('id','created_at','users','owner')
 
     def get_users(self, obj):
         return [{
@@ -26,6 +27,85 @@ class CourseSerializer(serializers.ModelSerializer):
         owner = self.context['request'].user
         validated_data['owner'] = owner
         return Course.objects.create(**validated_data)
+
+class CourseRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CourseRoles
+        fields = ['course_role']
+
+class UserCourseInfoSerializer(serializers.ModelSerializer):
+    course_roles = serializers.SerializerMethodField()
+    class Meta:
+        model = SiteUser
+        fields = ['id','username','role', 'course_roles']
+
+    def get_course_roles(self, obj):
+        course = self.context.get('course')
+        roles = obj.course_roles.filter(course=course)
+        return CourseRoleSerializer(roles, many=True).data
+
+class CourseUserPromoteSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    new_role = serializers.ChoiceField(choices=['student','co_lecturer'])
+    def validate(self, data):
+        course = self.context.get('course')
+        requested_user = self.context.get('user')
+        user_id = data.get('user_id')
+        if requested_user.role not in ['lecturer']:
+            raise serializers.ValidationError('You dont have permission to do this')
+        if not CourseRoles.objects.filter(course=course, user_id=user_id).exists():
+            raise serializers.ValidationError("User is not enrolled in this course")
+
+        return data
+
+    def save(self, **kwargs):
+        course = self.context.get('course')
+        user_id = self.validated_data['user_id']
+        new_role = self.validated_data['new_role']
+
+        course_role = CourseRoles.objects.get(course=course, user_id=user_id)
+        course_role.course_role = new_role
+        course_role.save()
+
+        return course_role.user
+
+class CourseUserKickSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+
+    def validate(self, data):
+        course = self.context.get('course')
+        user_id = data.get('user_id')
+        requested_user = self.context.get('user')
+        try:
+            user = CourseRoles.objects.get(course=course, user_id=user_id)
+        except CourseRoles.DoesNotExist:
+            raise serializers.ValidationError("User is not enrolled in this course")
+
+        try:
+            requested_user_role = CourseRoles.objects.get(course=course, user=requested_user)
+        except CourseRoles.DoesNotExist:
+            raise serializers.ValidationError("You are not enrolled in this course")
+
+        if requested_user.id == user.id:
+            raise serializers.ValidationError("You can't kick yourself")
+        if not requested_user_role:
+            raise serializers.ValidationError("Requested user is not enrolled in this course")
+        if not user:
+            raise serializers.ValidationError("User is not enrolled in this course")
+
+        elif user.course_role in ['co_lecturer'] and requested_user_role.course_role not in ['co_lecturer']:
+            raise serializers.ValidationError("You dont have permission to do this")
+        elif requested_user_role.course_role not in ['co_lecturer','lecturer']:
+            raise serializers.ValidationError("You dont have permission to do this")
+        return data
+
+    def save(self, **kwargs):
+        course = self.context.get('course')
+        user_id = self.validated_data['user_id']
+        with transaction.atomic():
+            CourseRoles.objects.filter(course=course, user_id=user_id).delete()
+            course.users.remove(user_id)
+        return {"message":"User has been deleted from this course"}
 
 class CourseMiniForAdminSerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
@@ -58,7 +138,6 @@ class CourseMiniSerializer(serializers.ModelSerializer):
 
 
 class SectionContentSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = SectionContent
         fields = ('id','order','content_type', 'title', 'content')
@@ -66,11 +145,21 @@ class SectionContentSerializer(serializers.ModelSerializer):
 #TODO bookmarks needed?
 class CourseSectionsGetSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
+    bookmarked = serializers.SerializerMethodField()
     class Meta:
         model = CourseSections
-        fields = ('id','order','section_name','section_content')
+        fields = ('id','order','section_name','section_content','bookmarked')
+
+    def get_bookmarked(self, obj):
+        return obj.sections_bookmarks.filter(user=self.context.get('user'),is_bookmarked=True).exists()
 
 
+
+class CourseDataGetSerializer(serializers.ModelSerializer):
+    course_sections = CourseSectionsGetSerializer(many=True,read_only=True)
+    class Meta:
+        model = Course
+        fields = ('id', 'title', 'short_description', 'created_at', 'course_accessibility', 'course_sections',)
 
 class CourseSectionsSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
@@ -112,7 +201,8 @@ class SectionCreateUpdateSerializer(serializers.ModelSerializer):
 class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(required=False)
     content = serializers.CharField(required=False)
-    content_type = serializers.CharField(required=False)
+    content_type = serializers.CharField(required=True)
+
     class Meta:
         model = SectionContent
         fields = ('id', 'order', 'content_type' , 'title', 'content')
@@ -120,12 +210,17 @@ class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         section = self.context.get('section')
         allowed_content_type = ['lection','test']
-        if not validated_data.get('order'):
-            block_order = SectionContent.objects.filter(section=section).count() + 1
-            validated_data['order'] = block_order
-        if not validated_data.get('content_type') in allowed_content_type:
+        content_type = validated_data.get('content_type')
+        if not content_type in allowed_content_type:
             raise serializers.ValidationError('Invalid content type')
-        return SectionContent.objects.create(section=section, **validated_data)
+
+        if not validated_data.get('order'):
+            validated_data['order'] = SectionContent.objects.filter(section=section).count() +1
+        with transaction.atomic():
+            block = SectionContent.objects.create(section=section, **validated_data)
+            if content_type == 'test':
+                TestBlock.objects.create(section=section,block=block)
+        return block
 
     def update(self, instance,validated_data):
         with transaction.atomic():
@@ -139,7 +234,7 @@ class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
 class SectionTestCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestBlock
-        fields = ('test_title','test_description')
+        fields = ('id', 'test_title','test_description')
 
     def create(self, validated_data):
         section_order = self.context.get('section_order')
@@ -160,7 +255,7 @@ class TestSerializer(serializers.ModelSerializer):
     test_answers = serializers.SerializerMethodField()
     class Meta:
         model = TestQuestions
-        fields = ('order','test_question','test_answers')
+        fields = ('id', 'order', 'test_question', 'test_answers')
     def get_test_answers(self, obj):
         answers = obj.test_answers.all().order_by('order')
         return TestAnswerSerializer(answers, many=True).data
@@ -170,7 +265,7 @@ class SectionWithTestSerializer(serializers.ModelSerializer):
     tests = SerializerMethodField()
     class Meta:
         model = SectionContent
-        fields = ('order','title','tests')
+        fields = ('id','order','title','tests')
 
         def get_tests(self, obj):
             tests = obj.tests.all().order_by('order')
@@ -190,6 +285,30 @@ class RequestsToCourseSerializer(serializers.ModelSerializer):
             'username': obj.user.username,
             'role': obj.user.role
         }
+
+class CourseRequestApprovalSerializer(serializers.Serializer):
+    request_id = serializers.IntegerField()
+    new_status = serializers.ChoiceField(choices=['approved', 'rejected', 'on_mod'])
+
+    def validate(self, attrs):
+        course = self.context.get('course')
+        request_id = attrs.get('request_id')
+        new_status = attrs.get('new_status')
+
+        try:
+            join_request = CourseJoinRequests.objects.get(pk=request_id)
+        except CourseJoinRequests.DoesNotExist:
+            raise serializers.ValidationError('Invalid request')
+
+        if join_request.course.id != course.id:
+            raise serializers.ValidationError('Course ID doesn\'t match the request')
+
+        if join_request.course.users.filter(id=join_request.user.id).exists():
+            raise serializers.ValidationError("User is already in the course")
+
+        self.instance = join_request
+        return attrs
+
 
 
 class CourseRequestSerializer(serializers.ModelSerializer):
@@ -215,7 +334,7 @@ class CourseRequestSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError('Youre already approved and exist in course')
                 else:
                     return attrs
-            #TODO mb celery-beat/another thing task for possibility to repeat request or sthing like this
+
             elif req.status == "rejected":
                 raise serializers.ValidationError('Request rejected')
         attrs['approved'] = False

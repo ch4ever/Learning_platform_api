@@ -39,12 +39,25 @@ services:
       - "15672:15672"
     networks:
       - platform_network
+    environment:
+      RABBITMQ_DEFAULT_USER: nik
+      RABBITMQ_DEFAULT_PASS: 1234
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   celery:
     build:
       context: .
     container_name: platform_celery
-    command: ["celery", "-A", "Learning_platform", "worker", "-l", "info"]
+    command: >
+      sh -c "until nc -z rabbit 5672; do
+             echo 'Waiting for RabbitMQ...';
+             sleep 2;
+           done;
+           celery -A Learning_platform worker -l info"
     depends_on:
       - web
       - db
@@ -62,13 +75,19 @@ services:
     container_name: LPlatform_django
     develop:
       <<: *develop
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "until nc -z rabbit 5672; do
+               echo 'Waiting for RabbitMQ from web...';
+               sleep 2;
+             done;
+             python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
       - db
+      - rabbit
     networks:
       - platform_network
 

@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from rest_framework_nested.routers import NestedSimpleRouter
 
+from teacher_app.views import TestViewSet
 from . import views
 
 router = SimpleRouter()
@@ -12,6 +13,9 @@ section_router.register(r'sections', views.CourseSectionsViewSet, basename='sect
 
 blocks_router = NestedSimpleRouter(section_router, r'sections', lookup='section')
 blocks_router.register(r'blocks', views.CourseBlocksViewSet, basename='course-blocks')
+
+
+
 urlpatterns = [
     path('courses/<int:course_pk>/sections/swap/',views.SectionsSwap.as_view()),
     path('courses/<course_pk>/sections/<section_pk>/blocks/swap/',views.SectionBlockSwap.as_view()),
@@ -19,5 +23,6 @@ urlpatterns = [
     path('', include(router.urls)),
     path('', include(section_router.urls)),
     path('', include(blocks_router.urls)),
+
 
 ]

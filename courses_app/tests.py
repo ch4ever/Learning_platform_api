@@ -39,8 +39,8 @@ def test_get_course_info(student_with_auth,course):
 
 
 
-#TODO FOR CourseRoles need signal for auto-add role to user due to his site role (mb done)
-#TODO REMAKE TESTS cuz COursejoinreq not work
+
+
 @pytest.mark.django_db
 def test_course_request_no_staff(student_with_auth, private_course, user_student):
     response = student_with_auth.post(f'/courses/{private_course.id}/request/')

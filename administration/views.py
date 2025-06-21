@@ -11,7 +11,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from administration.serializers import AdminAllUsersSerializer, AdminTeacherApproveSerializer, AdminCourseSerializer, \
     AdmCourseUserRedactSerializer
-from courses_app.models import Course, CourseRoles
+from courses_app.models import Course, CourseRoles, CourseJoinRequests
 from main.models import SiteUser
 from main.permissions import Staff
 
@@ -132,6 +132,10 @@ class AdmCourseGetRedact(viewsets.ModelViewSet):
         with transaction.atomic():
             course.users.remove(user_id)
             CourseRoles.objects.filter(course=course,user_id=user_id).delete()
+
+            request =CourseJoinRequests.objects.filter(course=course, user_id=user_id)
+            if request:
+                request.update(status='not_active')
         return Response({"message":"user removed from course successfully"},status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'],url_path='redactuser')
