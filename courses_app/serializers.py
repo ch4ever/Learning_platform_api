@@ -4,9 +4,8 @@ from rest_framework.fields import SerializerMethodField
 
 from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests, TestQuestions, TestBlock, \
     CourseRoles
-from courses_app.utils import assign_order
 from main.models import SiteUser
-from teacher_app.serializers import TestAnswerSerializer
+from teacher_app.serializers import TestAnswerSerializer, TestBlockGetUpdateSerializer
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -142,7 +141,7 @@ class SectionContentSerializer(serializers.ModelSerializer):
         model = SectionContent
         fields = ('id','order','content_type', 'title', 'content')
 
-#TODO bookmarks needed?
+
 class CourseSectionsGetSerializer(serializers.ModelSerializer):
     section_content = SectionContentSerializer(many=True, read_only=True)
     bookmarked = serializers.SerializerMethodField()
@@ -153,16 +152,29 @@ class CourseSectionsGetSerializer(serializers.ModelSerializer):
     def get_bookmarked(self, obj):
         return obj.sections_bookmarks.filter(user=self.context.get('user'),is_bookmarked=True).exists()
 
-
-
 class CourseDataGetSerializer(serializers.ModelSerializer):
     course_sections = CourseSectionsGetSerializer(many=True,read_only=True)
     class Meta:
         model = Course
         fields = ('id', 'title', 'short_description', 'created_at', 'course_accessibility', 'course_sections',)
 
+class SectionContentMultiSerializer(serializers.ModelSerializer):
+    test_block = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SectionContent
+        fields = ['id', 'order', 'content_type', 'title', 'content', 'test_block']
+
+    def get_test_block(self, obj):
+        if obj.content_type == 'test':
+            test_block = TestBlock.objects.filter(section=obj).first()
+            if test_block:
+                return TestBlockGetUpdateSerializer(test_block).data
+        return None
+
+
 class CourseSectionsSerializer(serializers.ModelSerializer):
-    section_content = SectionContentSerializer(many=True, read_only=True)
+    section_content = SectionContentMultiSerializer(many=True, read_only=True)
     bookmarked = serializers.SerializerMethodField()
     class Meta:
         model = CourseSections
@@ -171,7 +183,6 @@ class CourseSectionsSerializer(serializers.ModelSerializer):
     def get_bookmarked(self,obj):
         bookmark =  obj.sections_bookmarks.filter(user=self.context.get('user')).exists()
         return bookmark
-
 
 class SectionCreateUpdateSerializer(serializers.ModelSerializer):
     section_name = serializers.CharField(required=False)
@@ -237,18 +248,18 @@ class SectionTestCreateUpdateSerializer(serializers.ModelSerializer):
         fields = ('id', 'test_title','test_description')
 
     def create(self, validated_data):
-        section_order = self.context.get('section_order')
-        course = self.context.get('course')
-        try:
-            section = course.course_sections.get(order=section_order)
-        except CourseSections.DoesNotExist:
-            raise serializers.ValidationError('Section does not exist')
-        test_title = validated_data.get('test_title', 'Test1')
-        test_description = validated_data.get('test_description', '')
-        test_order = assign_order(section)
+        section = self.context.get('section')
+        block_order = SectionContent.objects.filter(section=section).count() + 1
         with transaction.atomic():
-            test = TestBlock.objects.create(section=section,test_title=test_title,test_description=test_description,order=test_order)
-            TestQuestions.objects.create(test=test,test_title=test_title,test_description=test_description)
+            content = SectionContent.objects.create(section=section, content_type='test',
+                                                title=validated_data.get('title',f'Test{block_order}'),
+                                                content=validated_data.get('test_description',''),
+                                                order=block_order)
+
+            test = TestBlock.objects.create(section=content,test_title=validated_data.get('title',f'Test{block_order}'),
+                                        test_description=validated_data.get('test_description',''))
+        return test
+        #TestQuestions.objects.create(test=test,test_question=)
 
 
 class TestSerializer(serializers.ModelSerializer):

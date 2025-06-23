@@ -19,11 +19,12 @@ from courses_app.models import Course, SectionsBookmarks, CourseSections, Course
 from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, CourseSectionsSerializer, \
     CourseRequestSerializer, RequestsToCourseSerializer, CourseSectionsGetSerializer, SectionCreateUpdateSerializer, \
     SectionContentSerializer, SectionContentCreateUpdateSerializer, CourseRequestApprovalSerializer, \
-    CourseDataGetSerializer, UserCourseInfoSerializer, CourseUserPromoteSerializer, CourseUserKickSerializer
+    CourseDataGetSerializer, UserCourseInfoSerializer, CourseUserPromoteSerializer, CourseUserKickSerializer, \
+    SectionTestCreateUpdateSerializer, SectionContentMultiSerializer
 from main.models import SiteUser
 from main.permissions import *
 from student_app.serializers import StudentCourseLeaveSerializer, CodeJoinCourseSerializer
-from teacher_app.serializers import TestCreateUpdateSerializer, RawTestSerializer
+from teacher_app.serializers import TestCreateUpdateSerializer, RawTestSerializer,TestBlockGetUpdateSerializer
 
 
 class CourseViewSet(viewsets.ViewSet):
@@ -320,7 +321,7 @@ class CourseSectionsViewSet(viewsets.ViewSet):
         return Response({'message':'Section successfully deleted'},status=status.HTTP_204_NO_CONTENT)
 
 
-#TESTED
+
 class CourseBlocksViewSet(viewsets.ViewSet):
     authentication_classes = (JWTAuthentication,)
     permission_classes = (IsAuthenticated,Student)
@@ -342,9 +343,10 @@ class CourseBlocksViewSet(viewsets.ViewSet):
     #TODO rebuild for lection/tests
     def list(self, request, course_pk, pk, *args, **kwargs):
         course, section = self.get_crs_sct(course_pk, pk)
-        blocks = SectionContent.objects.filter(course=course, section=section).order_by('order')
+        blocks = SectionContent.objects.filter(section=section).order_by('order')
         serializer = SectionContentSerializer(blocks, many=True)
         return Response(serializer.data,status=status.HTTP_200_OK)
+
 
     @extend_schema(summary='Get section block',
                    responses={200:SectionContentSerializer, 400: OpenApiResponse(description='error message'),
@@ -357,11 +359,11 @@ class CourseBlocksViewSet(viewsets.ViewSet):
     def retrieve(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
         block = get_object_or_404(SectionContent, order=pk, section=section)
-        serializer = SectionContentSerializer(block)
+        serializer = SectionContentMultiSerializer(block)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
     #TODO fix creation of tests/lections + NEED TESTS
-    #NOT WORK YET
     @extend_schema(summary='Create section block',
                    request=SectionContentCreateUpdateSerializer,
                    responses={200: SectionContentSerializer, 400: OpenApiResponse(description='error message'), 404: OpenApiResponse(description='')},
@@ -386,19 +388,10 @@ class CourseBlocksViewSet(viewsets.ViewSet):
             return Response(output.data, status=status.HTTP_201_CREATED)
 
         elif block_content_type == 'test':
-            with transaction.atomic():
-                content = SectionContent.objects.create(section=section,content_type='test', title=request.data.get('block_title'),
-                                                        content=request.data.get('content',''),
-                                                        order=SectionContent.objects.filter(section=section).count() + 1)
-                test_block = TestBlock.objects.create(section=content,
-                                                      test_title=request.data.get('test_title','Test Title'),
-                                                      test_description=request.data.get('test_description',''),
-                                                      order=TestBlock.objects.filter(section=content).count() + 1)
-            serializer = TestCreateUpdateSerializer(data=request.data,
-                                                    context={'test': test_block})
+            serializer = SectionTestCreateUpdateSerializer(data=request.data, context={'section': section})
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            output_serializer = RawTestSerializer(serializer.instance)
+            output_serializer = TestBlockGetUpdateSerializer(serializer.instance)
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
         return Response({'message': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -416,7 +409,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
         course,section = self.get_crs_sct(course_pk, section_pk)
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
             raise PermissionDenied("Only CoLecturerOrAbove can update sections")
-        block = get_object_or_404(SectionContent, pk=pk,section=section)
+        block = get_object_or_404(SectionContent, pk=pk, section=section)
 
         if block.content_type == 'lection':
             serializer = SectionContentCreateUpdateSerializer(block, partial=True ,data=request.data, context={'section': section})
@@ -425,11 +418,11 @@ class CourseBlocksViewSet(viewsets.ViewSet):
             return Response(SectionContentSerializer(block).data, status=status.HTTP_200_OK)
 
         if block.content_type == 'test':
-            test = get_object_or_404(TestBlock, pk=pk, section=section)
-            serializer = TestCreateUpdateSerializer(test, data=request.data, partial=True)
+            test = get_object_or_404(TestBlock, section=block)
+            serializer = TestBlockGetUpdateSerializer(test, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            output_serializer = RawTestSerializer(serializer.instance)
+            output_serializer = TestBlockGetUpdateSerializer(serializer.instance)
             return Response(output_serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(summary='Delete section block',
@@ -443,8 +436,15 @@ class CourseBlocksViewSet(viewsets.ViewSet):
         course, section = self.get_crs_sct(course_pk, section_pk)
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
             raise PermissionDenied("Only CoLecturerOrAbove can delete sections")
-        block = get_object_or_404(SectionContent, pk=pk,section=section)
-        block.delete()
+        with transaction.atomic():
+            content = get_object_or_404(SectionContent, pk=pk,section=section)
+            if content.content_type == 'lection':
+                content.delete()
+            elif content.content_type == 'test':
+                test_block = get_object_or_404(TestBlock, section=content)
+                test_block.delete()
+                content.delete()
+
         updated_section = CourseSectionsSerializer(section).data
         return Response(updated_section,status=status.HTTP_200_OK)
 

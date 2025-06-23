@@ -2,8 +2,25 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from courses_app.models import TestQuestions, TestAnswers
-from courses_app.utils import assign_order, validate_answers
+from courses_app.models import TestQuestions, TestAnswers, TestBlock
+
+
+
+class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
+    order = serializers.SerializerMethodField()
+    class Meta:
+        model = TestBlock
+        fields = ['order','id', 'test_title', 'test_description']
+
+    def get_order(self,obj):
+        return obj.section.order
+
+    def update(self, instance, validated_data):
+        instance.test_title = validated_data.get('test_title', instance.test_title)
+        instance.test_description = validated_data.get('test_description', instance.test_description)
+        instance.save()
+        return instance
+
 
 
 class TestAnswerSerializer(serializers.ModelSerializer):
@@ -11,10 +28,12 @@ class TestAnswerSerializer(serializers.ModelSerializer):
         model = TestAnswers
         fields = ['order', 'answer_text', 'is_correct']
 
+
 class TestAnswersForTeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestAnswers
         fields = ['order', 'answer_text', 'is_correct']
+
 
 class RawTestSerializer(serializers.ModelSerializer):
     test_answers = TestAnswerSerializer(many=True, read_only=True)

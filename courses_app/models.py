@@ -108,7 +108,8 @@ class SectionContent(models.Model):
 
 
 class TestBlock(models.Model):
-    order = models.PositiveIntegerField()
+    #TODO dont need
+    #order = models.PositiveIntegerField()
     section = models.ForeignKey(SectionContent, on_delete=models.CASCADE, related_name='tests')
     test_title = models.CharField(max_length=22)
     test_description = models.TextField()
