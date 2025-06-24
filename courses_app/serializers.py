@@ -5,7 +5,7 @@ from rest_framework.fields import SerializerMethodField
 from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests, TestQuestions, TestBlock, \
     CourseRoles
 from main.models import SiteUser
-from teacher_app.serializers import TestAnswerSerializer, TestBlockGetUpdateSerializer
+from teacher_app.serializers import TestAnswerSerializer, TestBlockGetUpdateSerializer, AdminTestBlockSerializer
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -32,6 +32,7 @@ class CourseRoleSerializer(serializers.ModelSerializer):
         model = CourseRoles
         fields = ['course_role']
 
+
 class UserCourseInfoSerializer(serializers.ModelSerializer):
     course_roles = serializers.SerializerMethodField()
     class Meta:
@@ -42,6 +43,7 @@ class UserCourseInfoSerializer(serializers.ModelSerializer):
         course = self.context.get('course')
         roles = obj.course_roles.filter(course=course)
         return CourseRoleSerializer(roles, many=True).data
+
 
 class CourseUserPromoteSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
@@ -67,6 +69,7 @@ class CourseUserPromoteSerializer(serializers.Serializer):
         course_role.save()
 
         return course_role.user
+
 
 class CourseUserKickSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
@@ -106,6 +109,7 @@ class CourseUserKickSerializer(serializers.Serializer):
             course.users.remove(user_id)
         return {"message":"User has been deleted from this course"}
 
+
 class CourseMiniForAdminSerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     class Meta:
@@ -119,6 +123,7 @@ class CourseMiniForAdminSerializer(serializers.ModelSerializer):
         course_role = course.course_roles.filter(user=user).first()
         return course_role.course_role if course_role else None
 
+
 class CourseSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
@@ -129,6 +134,7 @@ class CourseSettingsSerializer(serializers.ModelSerializer):
             new_code = instance.re_generate_course_code()
             validated_data['course_code'] = new_code
         return super().update(instance,validated_data)
+
 
 class CourseMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -152,11 +158,13 @@ class CourseSectionsGetSerializer(serializers.ModelSerializer):
     def get_bookmarked(self, obj):
         return obj.sections_bookmarks.filter(user=self.context.get('user'),is_bookmarked=True).exists()
 
+
 class CourseDataGetSerializer(serializers.ModelSerializer):
     course_sections = CourseSectionsGetSerializer(many=True,read_only=True)
     class Meta:
         model = Course
         fields = ('id', 'title', 'short_description', 'created_at', 'course_accessibility', 'course_sections',)
+
 
 class SectionContentMultiSerializer(serializers.ModelSerializer):
     test_block = serializers.SerializerMethodField()
@@ -170,6 +178,20 @@ class SectionContentMultiSerializer(serializers.ModelSerializer):
             test_block = TestBlock.objects.filter(section=obj).first()
             if test_block:
                 return TestBlockGetUpdateSerializer(test_block).data
+        return None
+
+class AdminSectionContentMultiSerializer(serializers.ModelSerializer):
+    test_block = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SectionContent
+        fields = ['id', 'order', 'content_type', 'title', 'content', 'test_block']
+
+    def get_test_block(self, obj):
+        if obj.content_type == 'test':
+            test_block = TestBlock.objects.filter(section=obj).first()
+            if test_block:
+                return AdminTestBlockSerializer(test_block).data
         return None
 
 
@@ -208,7 +230,7 @@ class SectionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-#TODO Test
+#TODO rebuild to only test
 class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(required=False)
     content = serializers.CharField(required=False)
@@ -246,6 +268,11 @@ class SectionTestCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestBlock
         fields = ('id', 'test_title','test_description')
+    #TODO is needed?
+    def validate_test_title(self, value):
+        if value is None:
+            raise serializers.ValidationError('test_title cannot be None')
+        return value
 
     def create(self, validated_data):
         section = self.context.get('section')
@@ -296,6 +323,7 @@ class RequestsToCourseSerializer(serializers.ModelSerializer):
             'username': obj.user.username,
             'role': obj.user.role
         }
+
 
 class CourseRequestApprovalSerializer(serializers.Serializer):
     request_id = serializers.IntegerField()

@@ -108,19 +108,14 @@ class SectionContent(models.Model):
 
 
 class TestBlock(models.Model):
-    #TODO dont need
-    #order = models.PositiveIntegerField()
     section = models.ForeignKey(SectionContent, on_delete=models.CASCADE, related_name='tests')
     test_title = models.CharField(max_length=22)
     test_description = models.TextField()
-    class Meta:
-        ordering = ['order']
-        unique_together = ('section', 'order')
 
 
 class TestQuestions(models.Model):
     order = models.PositiveIntegerField()
-    test_block = models.ForeignKey(TestBlock, on_delete=models.CASCADE, related_name='test_block')
+    test_block = models.ForeignKey(TestBlock, on_delete=models.CASCADE, related_name='questions')
     test_question = models.TextField()
     test_answers_type = models.CharField(choices=[('single','single'),
                                                   ('multiple','multiple')],default='single')

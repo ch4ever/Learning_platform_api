@@ -20,7 +20,7 @@ from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, 
     CourseRequestSerializer, RequestsToCourseSerializer, CourseSectionsGetSerializer, SectionCreateUpdateSerializer, \
     SectionContentSerializer, SectionContentCreateUpdateSerializer, CourseRequestApprovalSerializer, \
     CourseDataGetSerializer, UserCourseInfoSerializer, CourseUserPromoteSerializer, CourseUserKickSerializer, \
-    SectionTestCreateUpdateSerializer, SectionContentMultiSerializer
+    SectionTestCreateUpdateSerializer, SectionContentMultiSerializer, AdminSectionContentMultiSerializer
 from main.models import SiteUser
 from main.permissions import *
 from student_app.serializers import StudentCourseLeaveSerializer, CodeJoinCourseSerializer
@@ -340,7 +340,6 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                        OpenApiParameter(name='course_pk', location=OpenApiParameter.PATH,required=True, type=int),
                        OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH,required=True, type=int),
                    ])
-    #TODO rebuild for lection/tests
     def list(self, request, course_pk, pk, *args, **kwargs):
         course, section = self.get_crs_sct(course_pk, pk)
         blocks = SectionContent.objects.filter(section=section).order_by('order')
@@ -356,11 +355,18 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                        OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=int),
                        OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=int),
                    ])
+    #TODO not work
     def retrieve(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
-        block = get_object_or_404(SectionContent, order=pk, section=section)
-        serializer = SectionContentMultiSerializer(block)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        block = get_object_or_404(SectionContent, pk=pk, section=section)
+        user = request.user
+        if not CoLecturerOrAbove().has_permission(user, course):
+            serializer = SectionContentMultiSerializer(block)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        if CoLecturerOrAbove().has_permission(user, course):
+            serializer = AdminSectionContentMultiSerializer(block)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"error":"Error while retrieve block"}, status=status.HTTP_200_OK)
 
 
     #TODO fix creation of tests/lections + NEED TESTS
@@ -386,7 +392,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
             new_block = serializer.save()
             output = SectionContentSerializer(new_block)
             return Response(output.data, status=status.HTTP_201_CREATED)
-
+        # TODO mb send in context "title" and convert due to content type?
         elif block_content_type == 'test':
             serializer = SectionTestCreateUpdateSerializer(data=request.data, context={'section': section})
             serializer.is_valid(raise_exception=True)
@@ -412,14 +418,14 @@ class CourseBlocksViewSet(viewsets.ViewSet):
         block = get_object_or_404(SectionContent, pk=pk, section=section)
 
         if block.content_type == 'lection':
-            serializer = SectionContentCreateUpdateSerializer(block, partial=True ,data=request.data, context={'section': section})
+            serializer = SectionContentCreateUpdateSerializer(block, partial=True ,data=request.data, context={'block': section})
             serializer.is_valid(raise_exception=True)
             block = serializer.save()
             return Response(SectionContentSerializer(block).data, status=status.HTTP_200_OK)
 
         if block.content_type == 'test':
             test = get_object_or_404(TestBlock, section=block)
-            serializer = TestBlockGetUpdateSerializer(test, data=request.data, partial=True)
+            serializer = TestBlockGetUpdateSerializer(test, data=request.data,context={"block": block}, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             output_serializer = TestBlockGetUpdateSerializer(serializer.instance)

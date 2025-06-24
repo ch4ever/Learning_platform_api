@@ -8,17 +8,26 @@ from courses_app.models import TestQuestions, TestAnswers, TestBlock
 
 class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
+    title = serializers.CharField(write_only=True, required=False)
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'test_description']
+        fields = ['order','id', 'test_title', 'title', 'test_description']
 
     def get_order(self,obj):
         return obj.section.order
 
     def update(self, instance, validated_data):
-        instance.test_title = validated_data.get('test_title', instance.test_title)
-        instance.test_description = validated_data.get('test_description', instance.test_description)
-        instance.save()
+        block = self.context.get('block')
+        #TODO change
+        if 'title' in validated_data:
+            validated_data['test_title'] = validated_data.get('title')
+
+        with transaction.atomic():
+            instance.test_title = validated_data.get('test_title', instance.test_title)
+            block.title = validated_data.get('test_title', block.title)
+            instance.test_description = validated_data.get('test_description', instance.test_description)
+            instance.save()
+            block.save()
         return instance
 
 
@@ -26,20 +35,27 @@ class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
 class TestAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestAnswers
-        fields = ['order', 'answer_text', 'is_correct']
+        fields = ['id', 'order', 'answer_text', 'is_correct']
 
-
-class TestAnswersForTeacherSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TestAnswers
-        fields = ['order', 'answer_text', 'is_correct']
 
 
 class RawTestSerializer(serializers.ModelSerializer):
     test_answers = TestAnswerSerializer(many=True, read_only=True)
     class Meta:
         model = TestQuestions
-        fields = ['order','test_question','test_answers']
+        fields = ['id', 'order','test_question','test_answers']
+
+
+class AdminTestBlockSerializer(serializers.ModelSerializer):
+    order = serializers.SerializerMethodField()
+    tests = RawTestSerializer(source='questions' ,many=True)
+
+    class Meta:
+        model = TestBlock
+        fields = ['order','id', 'test_title', 'test_description','tests']
+
+    def get_order(self,obj):
+        return obj.section.order
 
 
 class TestAnswersCreateSerializer(serializers.ModelSerializer):
