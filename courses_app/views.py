@@ -425,7 +425,12 @@ class CourseBlocksViewSet(viewsets.ViewSet):
 
         if block.content_type == 'test':
             test = get_object_or_404(TestBlock, section=block)
-            serializer = TestBlockGetUpdateSerializer(test, data=request.data,context={"block": block}, partial=True)
+            title = request.data.get('title') or request.data.get('test_title')
+            context = {"block": block}
+            if title:
+                context['title'] = title
+
+            serializer = TestBlockGetUpdateSerializer(test, data=request.data, context=context, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             output_serializer = TestBlockGetUpdateSerializer(serializer.instance)

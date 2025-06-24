@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.template.context_processors import request
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -8,23 +9,24 @@ from courses_app.models import TestQuestions, TestAnswers, TestBlock
 
 class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
-    title = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'title', 'test_description']
+        fields = ['order','id', 'test_title', 'test_description']
 
     def get_order(self,obj):
         return obj.section.order
 
     def update(self, instance, validated_data):
         block = self.context.get('block')
-        #TODO change
-        if 'title' in validated_data:
-            validated_data['test_title'] = validated_data.get('title')
+        context_title =self.context.get('title')
+        request_title = validated_data.get('test_title')
+
+        new_title = context_title if context_title else request_title if request_title else instance.test_title
 
         with transaction.atomic():
-            instance.test_title = validated_data.get('test_title', instance.test_title)
-            block.title = validated_data.get('test_title', block.title)
+            instance.test_title = new_title
+            block.title = new_title
             instance.test_description = validated_data.get('test_description', instance.test_description)
             instance.save()
             block.save()

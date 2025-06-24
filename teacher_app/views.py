@@ -17,28 +17,6 @@ from teacher_app.serializers import TestCreateUpdateSerializer, RawTestSerialize
 # Create your views here.
 #TODO student kick/promote(in course)/sections + sections_content create
 
-#TODO add-test / add-lecture
-#TODO FIX TEST
-class SectionBlockTestCreate(APIView):
-    permission_classes = (IsAuthenticated, CoLecturerOrAbove)
-    authentication_classes = (JWTAuthentication,)
-
-    def post(self, request, course_pk, section_pk, block_pk=None):
-        course = Course.objects.get(pk=course_pk)
-        section = get_object_or_404(CourseSections, pk=section_pk, course=course)
-
-        block = get_object_or_404(SectionContent, pk=block_pk, section=section, content_type='test')
-        test_block = get_object_or_404(TestBlock, section=block)
-
-        check_object_permissions(self, request, course)
-
-        serializer = TestCreateUpdateSerializer(data=request.data,
-                                                context={'request': request,'test_block': test_block})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        output_serializer = RawTestSerializer(serializer.instance)
-        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
-
 class SectionBlockTestAnswers(APIView):
     permission_classes = (IsAuthenticated, CoLecturerOrAbove)
     authentication_classes = (JWTAuthentication,)
