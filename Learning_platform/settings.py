@@ -132,8 +132,7 @@ broker_port = os.getenv('BROKER_PORT')
 
 CELERY_BROKER_URL = f'amqp://{broker_user}:{broker_password}@{broker_host}:{broker_port}//'
 CELERY_RESULT_BACKEND = f'rpc://'
-#TODO remove
-print("CELERY_BROKER_URL =", CELERY_BROKER_URL)
+
 
 AUTH_USER_MODEL = 'main.SiteUser'
 

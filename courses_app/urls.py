@@ -14,7 +14,8 @@ section_router.register(r'sections', views.CourseSectionsViewSet, basename='sect
 blocks_router = NestedSimpleRouter(section_router, r'sections', lookup='section')
 blocks_router.register(r'blocks', views.CourseBlocksViewSet, basename='course-blocks')
 
-
+fullTest_router = NestedSimpleRouter(blocks_router, r'blocks', lookup='block')
+fullTest_router.register(r'tests', TestViewSet, basename='tests')
 
 urlpatterns = [
     path('courses/<int:course_pk>/sections/swap/',views.SectionsSwap.as_view()),
@@ -23,6 +24,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('', include(section_router.urls)),
     path('', include(blocks_router.urls)),
+    path('', include(fullTest_router.urls)),
 
 
 ]

@@ -14,9 +14,11 @@ def check_object_permissions(view, request, obj):
             if not permission.has_object_permission(request, view, obj):
                 raise PermissionDenied("You do not have permission to perform this action")
 
+
 def assign_order(test_block):
     last = test_block.test_block.order_by('-order').first()
     return last.order + 1 if last else 1
+
 
 def validate_answers(answers, answers_type):
     if not answers or not isinstance(answers, list):

@@ -1,10 +1,9 @@
 from django.db import transaction
-from django.template.context_processors import request
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from courses_app.models import TestQuestions, TestAnswers, TestBlock
-
+from courses_app.utils import validate_answers
 
 
 class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
@@ -79,30 +78,21 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
         fields = ['order','test_answers_type','max_points','test_question','test_answers']
 
     def validate(self, data):
-        if len(data.get('test_question')) < 2:
+        test_question = data.get('test_question')
+
+        if test_question is not None and  len(test_question) < 2:
             raise ValidationError('Test question is too short')
 
         answers = data.get('test_answers', [])
         answers_type = data.get('test_answers_type')
+        if data.get('test_answers'):
+            validate_answers(answers, answers_type)
 
-        if not answers or len(answers) < 2:
-            raise ValidationError('Test should have at least 2 answers')
-
-        correct_answers = [a for a in answers if a.get('is_correct')]
-
-        if answers_type not in ['single', 'multiple']:
-            raise ValidationError('Test answers type')
-        if answers_type == 'single' and len(correct_answers) != 1 :
-            raise ValidationError('Single-type question must have exactly one correct answer')
-            #data['test_answers_type'] = 'multiple'
         return data
 
     def create(self, validated_data):
         answers_data = validated_data.pop('test_answers')
         test = self.context.get('test')
-
-        if not test:
-            raise ValidationError('Test block not found')
 
         if not validated_data.get('order') or validated_data['order'] is None:
             validated_data['order'] = TestQuestions.objects.filter(test_block=test).count()+1
@@ -118,28 +108,29 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         answers_data = validated_data.pop('test_answers', [])
 
+
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.save()
 
         old_answers = {answer.order: answer for answer in instance.test_answers.all()}
         orders = set()
+        if answers_data:
+            for answer_data in answers_data:
+                order = answer_data['order']
+                orders.add(order)
 
-        for answer_data in answers_data:
-            order = answer_data['order']
-            orders.add(order)
-
-            if order in old_answers:
-                answer = old_answers[order]
-                answer.answer_text = answer_data['answer_text']
-                answer.is_correct = answer_data['is_correct']
-                answer.save()
-            else:
-                TestAnswers.objects.create(test=instance, order=order,
+                if order in old_answers:
+                    answer = old_answers[order]
+                    answer.answer_text = answer_data['answer_text']
+                    answer.is_correct = answer_data['is_correct']
+                    answer.save()
+                else:
+                    TestAnswers.objects.create(test=instance, order=order,
                                            answer_text=answer_data['answer_text'],
                                            is_correct=answer_data['is_correct'])
-        for order, answer in old_answers.items():
-            if order not in orders:
-                answer.delete()
+            for order, answer in old_answers.items():
+                if order not in orders:
+                    answer.delete()
         return instance
 
