@@ -178,7 +178,7 @@ class SectionContentMultiSerializer(serializers.ModelSerializer):
             test_block = TestBlock.objects.filter(section=obj).first()
             if test_block:
                 return TestBlockGetUpdateSerializer(test_block).data
-        return None
+        return []
 
 class AdminSectionContentMultiSerializer(serializers.ModelSerializer):
     test_block = serializers.SerializerMethodField()

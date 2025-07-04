@@ -1,6 +1,8 @@
 from courses_app.models import CourseRoles
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from student_app.models import TestUserAnswers
+
 
 def assign_role(user,course,role=None):
     if not CourseRoles.objects.filter(user=user,course=course).exists():
@@ -15,11 +17,6 @@ def check_object_permissions(view, request, obj):
                 raise PermissionDenied("You do not have permission to perform this action")
 
 
-def assign_order(test_block):
-    last = test_block.test_block.order_by('-order').first()
-    return last.order + 1 if last else 1
-
-
 def validate_answers(answers, answers_type):
     if not answers or not isinstance(answers, list):
         raise ValidationError("Answers must be a non-empty list.")
@@ -32,3 +29,24 @@ def validate_answers(answers, answers_type):
         raise ValidationError('Test answer type is single but u marked as correct several answers')
 
     return answers
+
+def check_test_results(questions, session):
+    score = 0
+    for question in questions:
+        try:
+            user_answer = TestUserAnswers.objects.get(question=question, session=session)
+        except TestUserAnswers.DoesNotExist:
+            continue
+
+        correct_answers = set(question.test_answers.filter(is_correct=True).values_list("id", flat=True))
+        user_answers = set(user_answer.selected_answers.values_list("id", flat=True))
+
+        if correct_answers == user_answers:
+            points = 0
+            points += question.max_points or 0
+            score += points
+            user_answer.score = question.max_points
+        else:
+            user_answer.score = 0
+        user_answer.save()
+    return score

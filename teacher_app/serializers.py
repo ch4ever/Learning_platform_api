@@ -11,7 +11,7 @@ class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'test_description']
+        fields = ['order','id', 'test_title', 'test_description', 'time_for_test']
 
     def get_order(self,obj):
         return obj.section.order
@@ -27,6 +27,7 @@ class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
             instance.test_title = new_title
             block.title = new_title
             instance.test_description = validated_data.get('test_description', instance.test_description)
+            instance.time_for_test = validated_data.get('time_for_test', instance.time_for_test)
             instance.save()
             block.save()
         return instance
@@ -50,13 +51,17 @@ class RawTestSerializer(serializers.ModelSerializer):
 class AdminTestBlockSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
     tests = RawTestSerializer(source='questions' ,many=True)
+    time_for_test = serializers.SerializerMethodField()
 
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'test_description','tests']
+        fields = ['order','id', 'test_title', 'test_description','time_for_test' ,'tests']
 
     def get_order(self,obj):
         return obj.section.order
+
+    def get_time_for_test(self,obj):
+        return obj.time_for_test
 
 
 class TestAnswersCreateSerializer(serializers.ModelSerializer):

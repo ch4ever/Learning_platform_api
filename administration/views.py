@@ -14,6 +14,7 @@ from administration.serializers import AdminAllUsersSerializer, AdminTeacherAppr
 from courses_app.models import Course, CourseRoles, CourseJoinRequests
 from main.models import SiteUser
 from main.permissions import Staff
+from student_app.models import TestSession
 
 
 class AdministrationUserList(APIView):
@@ -160,3 +161,18 @@ class AdmCourseGetRedact(viewsets.ModelViewSet):
         return Response({"message":"user changed role successfully"},status=status.HTTP_200_OK)
 
 
+class TestSessionDeleteFinishView(APIView):
+    permission_classes = (IsAuthenticated, Staff)
+    authentication_classes = (JWTAuthentication, SessionAuthentication)
+
+    def post(self,request,pk):
+        action = request.data.get('action')
+        session = get_object_or_404(TestSession, pk=pk)
+        if action == 'delete':
+            session.delete()
+            return Response({"details":"session was deleted"},status=status.HTTP_204_NO_CONTENT)
+        elif action == 'finish':
+            session.is_finished = True
+            session.save()
+            return Response({"details":"session was finished"},status=status.HTTP_202_ACCEPTED)
+        return Response({"details":"invalid action"},status=status.HTTP_400_BAD_REQUEST)

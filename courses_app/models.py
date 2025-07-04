@@ -112,8 +112,8 @@ class SectionContent(models.Model):
 class TestBlock(models.Model):
     section = models.ForeignKey(SectionContent, on_delete=models.CASCADE, related_name='tests')
     test_title = models.CharField(max_length=22)
-    time_for_test = models.DurationField(default=timedelta(minutes=15))
     test_description = models.TextField()
+    time_for_test = models.DurationField(default=timedelta(minutes=15))
     possible_retries = models.PositiveIntegerField(default=0)
 
 

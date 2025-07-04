@@ -1,6 +1,5 @@
 from django.db import transaction
 from django.db.models import Prefetch
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from rest_framework import viewsets, status
 from rest_framework.authentication import SessionAuthentication
@@ -24,7 +23,7 @@ from courses_app.serializers import CourseSerializer, CourseSettingsSerializer, 
 from main.models import SiteUser
 from main.permissions import *
 from student_app.serializers import StudentCourseLeaveSerializer, CodeJoinCourseSerializer
-from teacher_app.serializers import TestCreateUpdateSerializer, RawTestSerializer,TestBlockGetUpdateSerializer
+from teacher_app.serializers import RawTestSerializer,TestBlockGetUpdateSerializer
 
 
 class CourseViewSet(viewsets.ViewSet):
@@ -355,7 +354,6 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                        OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=int),
                        OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=int),
                    ])
-    #TODO not work
     def retrieve(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
         block = get_object_or_404(SectionContent, pk=pk, section=section)
@@ -369,7 +367,6 @@ class CourseBlocksViewSet(viewsets.ViewSet):
         return Response({"error":"Error while retrieve block"}, status=status.HTTP_200_OK)
 
 
-    #TODO fix creation of tests/lections + NEED TESTS
     @extend_schema(summary='Create section block',
                    request=SectionContentCreateUpdateSerializer,
                    responses={200: SectionContentSerializer, 400: OpenApiResponse(description='error message'), 404: OpenApiResponse(description='')},
@@ -392,7 +389,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
             new_block = serializer.save()
             output = SectionContentSerializer(new_block)
             return Response(output.data, status=status.HTTP_201_CREATED)
-        # TODO mb send in context "title" and convert due to content type?
+
         elif block_content_type == 'test':
             serializer = SectionTestCreateUpdateSerializer(data=request.data, context={'section': section})
             serializer.is_valid(raise_exception=True)
