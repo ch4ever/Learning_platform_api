@@ -108,7 +108,7 @@ class SectionContent(models.Model):
         ordering = ['order']
         unique_together = ('section','order')
 
-#TODO fix serializers to create with time and update time
+
 class TestBlock(models.Model):
     section = models.ForeignKey(SectionContent, on_delete=models.CASCADE, related_name='tests')
     test_title = models.CharField(max_length=22)

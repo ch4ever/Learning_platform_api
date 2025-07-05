@@ -230,7 +230,7 @@ class SectionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-#TODO rebuild to only test
+
 class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(required=False)
     content = serializers.CharField(required=False)
@@ -267,8 +267,8 @@ class SectionContentCreateUpdateSerializer(serializers.ModelSerializer):
 class SectionTestCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestBlock
-        fields = ('id', 'test_title','test_description')
-    #TODO is needed?
+        fields = ('id', 'test_title','test_description','time_for_test','possible_retries')
+
     def validate_test_title(self, value):
         if value is None:
             raise serializers.ValidationError('test_title cannot be None')
@@ -286,7 +286,7 @@ class SectionTestCreateUpdateSerializer(serializers.ModelSerializer):
             test = TestBlock.objects.create(section=content,test_title=validated_data.get('title',f'Test{block_order}'),
                                         test_description=validated_data.get('test_description',''))
         return test
-        #TestQuestions.objects.create(test=test,test_question=)
+
 
 
 class TestSerializer(serializers.ModelSerializer):

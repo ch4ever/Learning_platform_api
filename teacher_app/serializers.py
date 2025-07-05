@@ -11,7 +11,7 @@ class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'test_description', 'time_for_test']
+        fields = ['order','id', 'test_title','possible_retries' ,'test_description', 'time_for_test']
 
     def get_order(self,obj):
         return obj.section.order
@@ -40,6 +40,10 @@ class TestAnswerSerializer(serializers.ModelSerializer):
         fields = ['id', 'order', 'answer_text', 'is_correct']
 
 
+class TestSessionAnswerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestAnswers
+        fields = ['id', 'order', 'answer_text',]
 
 class RawTestSerializer(serializers.ModelSerializer):
     test_answers = TestAnswerSerializer(many=True, read_only=True)
@@ -74,7 +78,7 @@ class TestAnswersCreateSerializer(serializers.ModelSerializer):
             raise ValidationError('Answer text cannot be empty')
         return value
 
-#TODO DoBUILD
+
 class TestCreateUpdateSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(required=False)
     test_answers = TestAnswersCreateSerializer(many=True)
@@ -108,7 +112,7 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
                 TestAnswers.objects.create(test=question,**answer_data)
         return question
 
-#TODO understand + validation of questions
+#TODO understand
     @transaction.atomic
     def update(self, instance, validated_data):
         answers_data = validated_data.pop('test_answers', [])

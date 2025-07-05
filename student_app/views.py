@@ -20,21 +20,28 @@ from student_app.serializers import SessionTestSerializer, TestWithSelectedAnswe
 
 
 "Session start"
-#TODO rebuild mb for  block id --> search test?
 class TestSessionCreateView(APIView):
     authentication_classes = (JWTAuthentication,)
     permission_classes = (IsAuthenticated,StudentOrAbove)
 
     def post(self, request, pk=None):
         test = get_object_or_404(TestBlock, pk=pk)
-        session, created = TestSession.objects.get_or_create(test_block=test, user=request.user, is_finished=False)
+        existed_sessions = TestSession.objects.filter(test_block=test, user=request.user)
 
-        if not created:
-            return Response({"detail":"You already have test session"},status=status.HTTP_204_NO_CONTENT)
-        else:
-            test_duration = test.time_for_test
-            finish_test.apply_async(args=[str(session.uuid)], countdown=test_duration.total_seconds())
-            return Response({"detail":"Test session started","uuid": session.uuid},status=status.HTTP_201_CREATED)
+        if existed_sessions.count() >= test.possible_retries:
+            return Response({'detail':"You exceeded the maximum number of retries."}, status=status.HTTP_400_BAD_REQUEST)
+        active_session = existed_sessions.filter(is_finished=False).first()
+        if active_session:
+            return Response({"detail":"You already have test session: ","uuid":str(active_session.uuid)},
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        session= TestSession.objects.create(test_block=test, user=request.user, is_finished=False)
+
+
+
+        test_duration = test.time_for_test
+        finish_test.apply_async(args=[str(session.uuid)], countdown=test_duration.total_seconds())
+        return Response({"detail":"Test session started", "uuid": session.uuid},status=status.HTTP_201_CREATED)
 
 """session questions list/1 by order"""
 class TestSessionViewSet(viewsets.ViewSet):
@@ -57,7 +64,6 @@ class TestSessionViewSet(viewsets.ViewSet):
         else:
             return Response({"detail":f"This test session has been finished, score:{session.summary_score}"},status=status.HTTP_200_OK)
 
-    #TODO mb rebuild for order
     def post(self, request, pk=None):
         session = get_object_or_404(TestSession, pk=pk)
         question = request.query_params.get("question")
@@ -70,7 +76,6 @@ class TestSessionViewSet(viewsets.ViewSet):
             if selected_answers:
                 answers = TestAnswers.objects.filter(id__in=selected_answers, test=question)
                 new = TestUserAnswers.objects.create(question=question, session=session)
-                #TODO check
                 new.selected_answers.set(answers)
 
 

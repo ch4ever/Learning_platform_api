@@ -33,13 +33,15 @@ def change_request_status_and_add(request_id,new_status):
 
 @shared_task
 def finish_test(session_uuid):
-    session = TestSession.objects.get(uuid=session_uuid)
+    try:
+        session = TestSession.objects.get(uuid=session_uuid)
+    except TestSession.DoesNotExist:
+        return f"Session {session_uuid} does not exist"
     questions = session.test_block.questions.all()
-    if session:
-        with transaction.atomic():
-            check_test_results(questions, session)
-            session.is_finished = True
-            session.finished_at = timezone.now()
-            session.save()
-    else:
-        return f"Got invalid session {session_uuid}"
+
+    with transaction.atomic():
+        check_test_results(questions, session)
+        session.is_finished = True
+        session.finished_at = timezone.now()
+        session.save()
+

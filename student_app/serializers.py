@@ -5,7 +5,7 @@ from rest_framework.generics import get_object_or_404
 from courses_app.models import Course, SectionsBookmarks, TestQuestions
 from courses_app.utils import assign_role
 from student_app.models import TestSession, TestUserAnswers
-from teacher_app.serializers import TestAnswerSerializer
+from teacher_app.serializers import TestAnswerSerializer, TestSessionAnswerSerializer
 
 
 class StudentCourseLeaveSerializer(serializers.Serializer):
@@ -65,7 +65,7 @@ class CodeJoinCourseSerializer(serializers.ModelSerializer):
         return data
 
 class TestWithSelectedAnswersSerializer(serializers.ModelSerializer):
-    test_answers = TestAnswerSerializer(many=True, read_only=True)
+    test_answers = TestSessionAnswerSerializer(many=True, read_only=True)
     selected_answers = serializers.SerializerMethodField()
 
     class Meta:
@@ -78,11 +78,10 @@ class TestWithSelectedAnswersSerializer(serializers.ModelSerializer):
             return []
         try:
             user_answers = TestUserAnswers.objects.get(session=session,question=obj)
-
         except TestUserAnswers.DoesNotExist:
             return []
 
-        serializer = TestAnswerSerializer(user_answers.selected_answers.all(), many=True)
+        serializer = TestSessionAnswerSerializer(user_answers.selected_answers.all(), many=True)
         return serializer.data
 
 
