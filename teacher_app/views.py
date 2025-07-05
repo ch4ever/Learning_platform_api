@@ -1,3 +1,5 @@
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError, PermissionDenied
@@ -17,9 +19,6 @@ from teacher_app.serializers import TestCreateUpdateSerializer, RawTestSerialize
 
 # Create your views here.
 
-#TODO TEST beggining + create model for it and uuid for test with result + improve serializer to show ur last tries
-
-#NOT WORK YET
 #TESTED
 class TestViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated, StudentOrAbove)
@@ -32,7 +31,17 @@ class TestViewSet(viewsets.ModelViewSet):
         test = get_object_or_404(TestBlock, section=block)
         return block, test
 
-
+    @extend_schema(summary="get test question",
+                   parameters=[
+        OpenApiParameter(name='course_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+        OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+        OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+        OpenApiParameter(name='pk', description="test_pk", location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT)],
+                    responses={200: RawTestSerializer,
+                               404: OpenApiResponse(description="Block/Section/Test question not found"),
+                               403: OpenApiResponse(description="Permission Denied"),
+                               },
+    )
     def retrieve(self, request, *args, **kwargs):
         course_pk = self.kwargs.get('course_pk')
         section_pk = self.kwargs.get('section_pk')
@@ -45,15 +54,25 @@ class TestViewSet(viewsets.ModelViewSet):
         return Response(serializer.data,status=status.HTTP_200_OK)
 
 
+    @extend_schema(summary="create test question",
+                   parameters=[
+                       OpenApiParameter(name='course_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                       OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                       OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT)],
+                   request = TestCreateUpdateSerializer,
+                   responses = {201: RawTestSerializer,
+                                404: OpenApiResponse(description="Block/Section question not found") ,
+                                403: OpenApiResponse(description="Permission Denied") },
+                   )
     def create(self,request ,*args, **kwargs):
         course_pk = self.kwargs.get('course_pk')
         section_pk = self.kwargs.get('section_pk')
         block_pk = self.kwargs.get('block_pk')
 
-        course = get_object_or_404(Course,pk=course_pk)
+        course = get_object_or_404(Course, pk=course_pk)
         section = get_object_or_404(CourseSections, pk=section_pk, course=course)
 
-        if not CoLecturerOrAbove().has_object_permission(request,self,course):
+        if not CoLecturerOrAbove().has_object_permission(request, self,course):
             raise PermissionDenied("You're not allowed to do this ")
 
         else:
@@ -66,6 +85,17 @@ class TestViewSet(viewsets.ModelViewSet):
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
 
+    @extend_schema(summary="update test question",
+                   parameters=[
+                    OpenApiParameter(name='course_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                    OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                    OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                    OpenApiParameter(name='pk', description="test_pk", location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT)],
+                   request=TestCreateUpdateSerializer,
+                   responses = {200: RawTestSerializer,
+                                404: OpenApiResponse(description="Block/Section/Test question not found"),
+                                403: OpenApiResponse(description="Permission Denied")}
+                   )
     def partial_update(self,request, *args, **kwargs):
         course_pk = self.kwargs.get('course_pk')
         section_pk = self.kwargs.get('section_pk')
@@ -83,6 +113,18 @@ class TestViewSet(viewsets.ModelViewSet):
         output_serializer = RawTestSerializer(serializer.instance)
         return Response(output_serializer.data, status=status.HTTP_200_OK)
 
+
+    @extend_schema(summary="test question delete",
+                   parameters=[
+                       OpenApiParameter(name='course_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                       OpenApiParameter(name='section_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                       OpenApiParameter(name='block_pk', location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT),
+                       OpenApiParameter(name='pk', description="test_pk", location=OpenApiParameter.PATH, required=True, type=OpenApiTypes.INT)],
+                   responses={202: AdminSectionContentMultiSerializer,
+                              404: OpenApiResponse(description="Block/Section/Test question not found"),
+                              403: OpenApiResponse(description="Permission Denied")
+                              }
+                   )
     def destroy(self, request, *args, **kwargs):
         course_pk = self.kwargs.get('course_pk')
         section_pk = self.kwargs.get('section_pk')
@@ -93,44 +135,6 @@ class TestViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(TestQuestions, pk=pk, test_block=test)
         question.delete()
         output_serializer = AdminSectionContentMultiSerializer(block)
-        return Response(output_serializer.data, status=status.HTTP_204_NO_CONTENT)
+        return Response(output_serializer.data, status=status.HTTP_202_ACCEPTED)
 
 
-
-#DO i need 1more viewset???
-#TODO delete later
-class TestQuestionsView(APIView):
-    permission_classes = (IsAuthenticated, CoLecturerOrAbove)
-    authentication_classes = (JWTAuthentication,)
-
-    def get_block(self,course_pk,section_pk,block_pk,):
-        course = get_object_or_404(Course, pk=course_pk)
-        section = get_object_or_404(CourseSections, pk=section_pk, course=course)
-        block = get_object_or_404(SectionContent, pk=block_pk, section=section, content_type='test')
-        test_block = get_object_or_404(TestBlock, section=block)
-        return course, test_block
-
-    def post(self, request, course_pk, section_pk, block_pk):
-        course, test_block = self.get_block(course_pk, section_pk, block_pk)
-        check_object_permissions(self, request, course)
-
-        serializer = TestCreateUpdateSerializer(data=request.data, context={'test_block': test_block})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def patch(self, request, course_pk, section_pk, block_pk, pk):
-        course, test_block = self.get_block(course_pk, section_pk, block_pk)
-        question = get_object_or_404(TestQuestions, pk=pk, test_block=test_block)
-        serializer = TestCreateUpdateSerializer(instance=question, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        output_serializer = RawTestSerializer(test_block)
-        return Response(output_serializer.data, status=status.HTTP_200_OK)
-
-    def delete(self, request, course_pk, section_pk, block_pk, pk):
-        course, test_block = self.get_block(course_pk, section_pk, block_pk)
-        question = get_object_or_404(TestQuestions, pk=pk, test_block=test_block)
-        question.delete()
-        output_serializer = RawTestSerializer(test_block)
-        return Response(output_serializer.data, status=status.HTTP_204_NO_CONTENT)

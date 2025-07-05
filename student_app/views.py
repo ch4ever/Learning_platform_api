@@ -1,8 +1,11 @@
 from datetime import datetime
 
+import uuid
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from rest_framework import viewsets, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +22,13 @@ from student_app.serializers import SessionTestSerializer, TestWithSelectedAnswe
     TestAnswersValidationSerializer
 
 
-"Session start"
+
+@extend_schema(summary="test session start",
+               parameters=[OpenApiParameter(name="pk", description="Test session start", location=OpenApiParameter.PATH, required=True)],
+               responses={200: OpenApiResponse(description="Test session started successfully + uuid"),
+                          400: OpenApiResponse(description="Maximum tries exceeded"),
+                          406: OpenApiResponse(description="session already exists"),}
+               )
 class TestSessionCreateView(APIView):
     authentication_classes = (JWTAuthentication,)
     permission_classes = (IsAuthenticated,StudentOrAbove)
@@ -37,17 +46,20 @@ class TestSessionCreateView(APIView):
 
         session= TestSession.objects.create(test_block=test, user=request.user, is_finished=False)
 
-
-
         test_duration = test.time_for_test
         finish_test.apply_async(args=[str(session.uuid)], countdown=test_duration.total_seconds())
         return Response({"detail":"Test session started", "uuid": session.uuid},status=status.HTTP_201_CREATED)
 
-"""session questions list/1 by order"""
+
 class TestSessionViewSet(viewsets.ViewSet):
     authentication_classes = (JWTAuthentication,)
     permission_classes = (IsAuthenticated, StudentOrAbove)
 
+    @extend_schema(summary="Test questions list/1 by order",
+                   parameters=[OpenApiParameter(name='pk',description='test uuid', required=True, location=OpenApiParameter.PATH, type=OpenApiTypes.STR),
+                               OpenApiParameter(name='question', required=False, location=OpenApiParameter.QUERY, type=OpenApiTypes.INT)],
+                   responses={200: OpenApiResponse(response={'oneOf': [TestWithSelectedAnswersSerializer, SessionTestSerializer]})}
+                   )
     def retrieve(self, request, *args, **kwargs):
         pk = self.kwargs.get('pk')
         session = get_object_or_404(TestSession, pk=pk)
@@ -64,6 +76,12 @@ class TestSessionViewSet(viewsets.ViewSet):
         else:
             return Response({"detail":f"This test session has been finished, score:{session.summary_score}"},status=status.HTTP_200_OK)
 
+    @extend_schema(summary="Answer questions all/1 by order",
+                   parameters=[OpenApiParameter(name='uuid', required=True, location=OpenApiParameter.PATH, type=OpenApiTypes.STR),
+                               OpenApiParameter(name='question', required=False, location=OpenApiParameter.QUERY, type=OpenApiTypes.INT)],
+                   responses={200: OpenApiResponse(response={'oneOf': [TestWithSelectedAnswersSerializer, SessionTestSerializer]}),
+                              404: OpenApiResponse('Question/test not found')}
+                   )
     def post(self, request, pk=None):
         session = get_object_or_404(TestSession, pk=pk)
         question = request.query_params.get("question")
@@ -103,7 +121,12 @@ class TestSessionViewSet(viewsets.ViewSet):
             return Response(output_serializer.data, status=status.HTTP_202_ACCEPTED)
 
 
-
+@extend_schema(summary="Test Submit",
+               parameters=[OpenApiParameter(name="pk", description="test uuid.",
+                                            required=True,location=OpenApiParameter.PATH, type=OpenApiTypes.STR),],
+               responses={200: OpenApiResponse( response=OpenApiTypes.OBJECT,description="Test result with total score",),
+                          404: OpenApiResponse(description="Not found.")},
+               )
 class TestSubmitView(APIView):
     authentication_classes = (JWTAuthentication,)
     permission_classes = (IsAuthenticated, StudentOrAbove)
@@ -124,5 +147,5 @@ class TestSubmitView(APIView):
             session.finished_at = timezone.now()
             session.summary_score = score
             session.save()
-        #TODO serializer for this shit
+
         return Response({"score":score}, status=status.HTTP_200_OK)
