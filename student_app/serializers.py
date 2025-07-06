@@ -26,7 +26,7 @@ class BookmarkCourseSectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = SectionsBookmarks
         fields = '__all__'
-        read_only_fields = ('id','user','section')
+        read_only_fields = ('id', 'user', 'section')
 
 
     def create(self, **kwargs):
@@ -46,7 +46,6 @@ class CodeJoinCourseSerializer(serializers.ModelSerializer):
     def validate(self, data):
         code = self.context.get('code')
         user = self.context.get('user')
-
 
         if not code:
             raise serializers.ValidationError('code is required')
@@ -115,13 +114,34 @@ class SessionTestSerializer(serializers.ModelSerializer):
         session = obj
         return TestWithSelectedAnswersSerializer(questions, many=True,context={'session':session}).data
 
+
+class TestResultsWithSelectedAnswersSerializer(serializers.ModelSerializer):
+    test_answers = TestAnswerSerializer(many=True, read_only=True)
+    selected_answers = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TestQuestions
+        fields = ['id', 'order', 'test_question' ,'test_answers','selected_answers']
+
+    def get_selected_answers(self, obj):
+        session = self.context.get('session')
+        if not session:
+            return []
+        try:
+            user_answers = TestUserAnswers.objects.get(session=session,question=obj)
+        except TestUserAnswers.DoesNotExist:
+            return []
+
+        serializer = TestAnswerSerializer(user_answers.selected_answers.all(), many=True)
+        return serializer.data
+
 class TestSessionResultsSerializer(serializers.ModelSerializer):
     test = serializers.SerializerMethodField()
     time_left = serializers.SerializerMethodField()
 
     class Meta:
         model = TestSession
-        fields = ['uuid', 'time_left', 'test']
+        fields = ['uuid', 'time_left', 'test', 'summary_score']
 
     def get_time_left(self, obj):
         return obj.time_left().total_seconds()
@@ -129,4 +149,5 @@ class TestSessionResultsSerializer(serializers.ModelSerializer):
     def get_test(self, obj):
         questions = obj.test_block.questions.all().order_by('order')
         session = obj
-        return TestWithSelectedAnswersSerializer(questions, many=True,context={'session':session}).data
+        return TestResultsWithSelectedAnswersSerializer(questions, many=True,context={'session':session}).data
+

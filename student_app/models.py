@@ -9,7 +9,6 @@ from main.models import SiteUser
 
 # Create your models here.
 
-#TODO do models for test_sessions
 class TestSession(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(SiteUser, on_delete=models.CASCADE, related_name='test_sessions')

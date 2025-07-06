@@ -5,7 +5,8 @@ from rest_framework.fields import SerializerMethodField
 from courses_app.models import Course, CourseSections, SectionContent, CourseJoinRequests, TestQuestions, TestBlock, \
     CourseRoles
 from main.models import SiteUser
-from teacher_app.serializers import TestAnswerSerializer, TestBlockGetUpdateSerializer, AdminTestBlockSerializer
+from teacher_app.serializers import TestBlockGetUpdateSerializer, AdminTestBlockSerializer, \
+    ShortTestSessionResultsSerializer
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -294,7 +295,9 @@ class TestSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestQuestions
         fields = ('id', 'order', 'test_question', 'test_answers')
+
     def get_test_answers(self, obj):
+        from teacher_app.serializers import TestAnswerSerializer
         answers = obj.test_answers.all().order_by('order')
         return TestAnswerSerializer(answers, many=True).data
 

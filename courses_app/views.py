@@ -38,6 +38,7 @@ class CourseViewSet(viewsets.ViewSet):
         serializer = CourseSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
     @extend_schema(summary='course detail',
                    responses={200: CourseSerializer, 400: OpenApiResponse(description='error message'),
                               404: OpenApiResponse(description='Course not found')},
@@ -49,6 +50,7 @@ class CourseViewSet(viewsets.ViewSet):
         course = get_object_or_404(Course.objects.select_related('owner').prefetch_related('users'), pk=pk)
         serializer = CourseDataGetSerializer(course, context={'user': user})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @extend_schema(summary='course leave',
                    responses={200: StudentCourseLeaveSerializer, 400: OpenApiResponse(description='error message'),
@@ -66,6 +68,7 @@ class CourseViewSet(viewsets.ViewSet):
         CourseJoinRequests.objects.filter(course=course, user=user).update(status='not_active')
         return Response({'message': 'You successfully left course'}, serializer.data)
 
+
     @extend_schema(summary='course create',
                    request=CourseSerializer,
                    responses={200: CourseSerializer, 400: OpenApiResponse(description='error message')}, )
@@ -78,6 +81,7 @@ class CourseViewSet(viewsets.ViewSet):
         course = serializer.save()
         assign_role(user=request.user, course=course, role='lecturer')
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
     @extend_schema(summary='request to join course',
                    request=CourseRequestSerializer,
@@ -100,6 +104,7 @@ class CourseViewSet(viewsets.ViewSet):
             return Response({'message': 'Joined successfully', 'approved': True}, status=status.HTTP_200_OK)
         return Response({'message': 'Request created', 'approved': False}, status=status.HTTP_201_CREATED)
 
+
     @extend_schema(summary='course settings',
                    request=CourseSettingsSerializer,
                    responses={200: CourseSettingsSerializer, 400: OpenApiResponse(description='Invalid input'),
@@ -111,6 +116,7 @@ class CourseViewSet(viewsets.ViewSet):
             permission_classes=[IsAuthenticated, CoLecturerOrAbove])
     def course_settings(self, request, pk):
         course = get_object_or_404(Course, pk=pk)
+        check_object_permissions(self, request, course)
         if request.method == "PATCH":
 
             check_object_permissions(self, request, course)
@@ -126,17 +132,18 @@ class CourseViewSet(viewsets.ViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response({'message': 'Invalid request'}, status=status.HTTP_400_BAD_REQUEST)
 
+
     @extend_schema(summary='section bookmark',
                    responses={202: OpenApiResponse(description='Bookmark created/deleted'),
                               404: OpenApiResponse(description='Section or Course not found')
                               },
                    parameters=[OpenApiParameter(name='pk', location=OpenApiParameter.PATH, description='Course ID'), ],
                    )
-    #TODO mb rewrite for serializer
     @action(detail=True, methods=['post'], url_path='bookmark', permission_classes=[IsAuthenticated, Student])
     def invert_bookmark(self, request, pk=None):
         course = get_object_or_404(Course, pk=pk)
         user = self.request.user
+        check_object_permissions(self,request, course)
         section_id = int(request.data.get('section_id'))
         section = CourseSections.objects.get(pk=section_id, course=course)
         bookmark, created = SectionsBookmarks.objects.get_or_create(section=section, user=user)
@@ -154,15 +161,12 @@ class CourseViewSet(viewsets.ViewSet):
             permission_classes=[IsAuthenticated, LecturerOrAbove])
     def course_users(self, request, pk):
         course = get_object_or_404(Course, pk=pk)
-
         check_object_permissions(self, request, course)
-
         if request.method == "GET":
-            #TODO understand
+
             users = SiteUser.objects.prefetch_related(Prefetch('course_roles',
                                                                queryset=CourseRoles.objects.filter(
-                                                                   course=course))).filter(
-                course_roles__course=course).distinct()
+                                                                        course=course))).filter(course_roles__course=course).distinct()
 
             serializer = UserCourseInfoSerializer(users, context={'course': course}, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -218,16 +222,15 @@ class CourseViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get', 'post'], url_path='requests',
             permission_classes=[IsAuthenticated, CoLecturerOrAbove])
     def manage_requests(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+        check_object_permissions(self, request, course)
         if request.method == 'GET':
             requests = CourseJoinRequests.objects.filter(course_id=pk, status='on_mod')
             serializer = RequestsToCourseSerializer(requests, many=True, )
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         if request.method == 'POST':
-            course = get_object_or_404(Course, pk=pk)
-            if not CoLecturerOrAbove().has_object_permission(request, self, course):
-                raise PermissionDenied("Only CoLecturerOrAbove can manage requests")
-
+            check_object_permissions(self,request, course)
             serializer = CourseRequestApprovalSerializer(data=request.data, context={'course': course})
 
             if not serializer.is_valid():
@@ -245,6 +248,7 @@ class CourseViewSet(viewsets.ViewSet):
 class CourseSectionsViewSet(viewsets.ViewSet):
     serializer_class = CourseSectionsSerializer
     authentication_classes = (JWTAuthentication,)
+    permission_classes = (IsAuthenticated,Student)
 
     def check_for_permission(self, request, course):
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
@@ -260,10 +264,12 @@ class CourseSectionsViewSet(viewsets.ViewSet):
     )
     def list(self, request, course_pk):
         course = get_object_or_404(Course, pk=course_pk)
+        check_object_permissions(self, request, course)
         sections = course.course_sections.filter(course=course)
         user = request.user
         serializer = CourseSectionsSerializer(sections, many=True, context={'user': user, })
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @extend_schema(summary='Create new section',
                    request=SectionCreateUpdateSerializer,
@@ -292,9 +298,11 @@ class CourseSectionsViewSet(viewsets.ViewSet):
                    )
     def retrieve(self, request, course_pk, pk):
         course = get_object_or_404(Course, pk=course_pk)
+        check_object_permissions(self, request, course)
         section = get_object_or_404(CourseSections, course=course, pk=pk)
         serializer = CourseSectionsSerializer(section, context={'user': request.user})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @extend_schema(summary='Partial section update',
                    request=SectionCreateUpdateSerializer,
@@ -309,6 +317,7 @@ class CourseSectionsViewSet(viewsets.ViewSet):
     def partial_update(self, request, course_pk, pk):
         course = get_object_or_404(Course, pk=course_pk)
         section = get_object_or_404(CourseSections, pk=pk, course=course)
+        check_object_permissions(self, request, course)
         self.check_for_permission(request, course)
         serializer = SectionCreateUpdateSerializer(section, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -325,6 +334,9 @@ class CourseSectionsViewSet(viewsets.ViewSet):
                                         description='ID section', required=True, type=int),
                    ])
     def destroy(self, request, course_pk, pk):
+        course = get_object_or_404(Course, pk=course_pk)
+        check_object_permissions(self, request, course)
+        self.check_for_permission(request, course)
         course = get_object_or_404(Course, pk=course_pk)
         section = get_object_or_404(CourseSections, pk=pk, course=course)
         section.delete()
@@ -350,6 +362,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                    ])
     def list(self, request, course_pk, pk, *args, **kwargs):
         course, section = self.get_crs_sct(course_pk, pk)
+        check_object_permissions(self, request, course)
         blocks = SectionContent.objects.filter(section=section).order_by('order')
         serializer = SectionContentSerializer(blocks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -364,15 +377,17 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                    ])
     def retrieve(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
+        check_object_permissions(self, request, course)
         block = get_object_or_404(SectionContent, pk=pk, section=section)
         user = request.user
-        if not CoLecturerOrAbove().has_permission(user, course):
-            serializer = SectionContentMultiSerializer(block)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        if CoLecturerOrAbove().has_permission(user, course):
+        if CoLecturerOrAbove().has_object_permission(request, self, course):
             serializer = AdminSectionContentMultiSerializer(block)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({"error": "Error while retrieve block"}, status=status.HTTP_200_OK)
+
+        else:
+            serializer = SectionContentMultiSerializer(block, context={'user': user})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @extend_schema(summary='Create section block',
                    request=SectionContentCreateUpdateSerializer,
@@ -384,8 +399,11 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                    ])
     def create(self, request, course_pk, section_pk, *args, **kwargs):
         course, section = self.get_crs_sct(course_pk, section_pk)
+        check_object_permissions(self, request, course)
+
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
             raise PermissionDenied("Only CoLecturerOrAbove can create sections")
+
         block_content_type = request.data.get('content_type')
         if block_content_type not in ('lection', 'test'):
             raise ValidationError("Invalid content type")
@@ -417,6 +435,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                    ])
     def partial_update(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
+        check_object_permissions(self, request, course)
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
             raise PermissionDenied("Only CoLecturerOrAbove can update sections")
         block = get_object_or_404(SectionContent, pk=pk, section=section)
@@ -450,6 +469,7 @@ class CourseBlocksViewSet(viewsets.ViewSet):
                    ])
     def destroy(self, request, course_pk, section_pk, pk):
         course, section = self.get_crs_sct(course_pk, section_pk)
+        check_object_permissions(self, request, course)
         if not CoLecturerOrAbove().has_object_permission(request, self, course):
             raise PermissionDenied("Only CoLecturerOrAbove can delete sections")
         with transaction.atomic():
@@ -479,6 +499,8 @@ class SectionsSwap(APIView):
                    ])
     def post(self, request, course_pk, *args, **kwargs):
         course = get_object_or_404(Course, pk=course_pk)
+        check_object_permissions(self, request, course)
+        CoLecturerOrAbove().has_object_permission(request, self, course)
 
         from_section = request.data.get('from_section')
         to_section = request.data.get('to_section')
@@ -522,6 +544,8 @@ class SectionBlockSwap(APIView):
                    ])
     def post(self, request, course_pk, section_pk, *args, **kwargs):
         course = get_object_or_404(Course, pk=course_pk)
+        check_object_permissions(self, request, course)
+        CoLecturerOrAbove().has_object_permission(request, self, course)
         section = get_object_or_404(CourseSections, course=course, pk=section_pk)
 
         try:

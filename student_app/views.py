@@ -14,13 +14,12 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from Learning_platform.tasks import finish_test
-from courses_app.models import TestBlock, TestQuestions, TestAnswers
-from courses_app.utils import check_test_results
+from courses_app.models import TestBlock, TestQuestions, TestAnswers, Course
+from courses_app.utils import check_test_results, check_object_permissions
 from main.permissions import StudentOrAbove
 from student_app.models import TestSession, TestUserAnswers
 from student_app.serializers import SessionTestSerializer, TestWithSelectedAnswersSerializer, \
-    TestAnswersValidationSerializer
-
+    TestAnswersValidationSerializer, TestSessionResultsSerializer
 
 
 @extend_schema(summary="test session start",
@@ -35,6 +34,10 @@ class TestSessionCreateView(APIView):
 
     def post(self, request, pk=None):
         test = get_object_or_404(TestBlock, pk=pk)
+        #TODO check
+        course_id = test.section.section.course.id
+        course = get_object_or_404(Course, id=course_id)
+        check_object_permissions(self, request, course)
         existed_sessions = TestSession.objects.filter(test_block=test, user=request.user)
 
         if existed_sessions.count() >= test.possible_retries:
@@ -74,7 +77,9 @@ class TestSessionViewSet(viewsets.ViewSet):
                 serializer = SessionTestSerializer(session, read_only=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
         else:
-            return Response({"detail":f"This test session has been finished, score:{session.summary_score}"},status=status.HTTP_200_OK)
+            serializer = TestSessionResultsSerializer(session, read_only=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            #return Response({"detail":f"This test session has been finished, score:{session.summary_score}"},status=status.HTTP_200_OK)
 
     @extend_schema(summary="Answer questions all/1 by order",
                    parameters=[OpenApiParameter(name='uuid', required=True, location=OpenApiParameter.PATH, type=OpenApiTypes.STR),

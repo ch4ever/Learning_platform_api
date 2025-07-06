@@ -4,17 +4,32 @@ from rest_framework.exceptions import ValidationError
 
 from courses_app.models import TestQuestions, TestAnswers, TestBlock
 from courses_app.utils import validate_answers
+from student_app.models import TestSession
 
+
+class ShortTestSessionResultsSerializer(serializers.ModelSerializer):
+    max_possible_score = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TestSession
+        fields = ['uuid', 'summary_score', 'max_possible_score', 'finished_at']
+
+    def get_max_possible_score(self, obj):
+        questions = obj.test_block.questions.all()
+        return sum(q.max_points for q in questions)
 
 class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
+    #TODO CHECK
+    user_results = ShortTestSessionResultsSerializer(source='test_sessions', read_only=True, many=True)
 
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title','possible_retries' ,'test_description', 'time_for_test']
+        fields = ['order','id', 'test_title' ,'test_description', 'time_for_test','possible_retries','user_results' ]
 
     def get_order(self,obj):
         return obj.section.order
+
 
     def update(self, instance, validated_data):
         block = self.context.get('block')
@@ -28,6 +43,7 @@ class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
             block.title = new_title
             instance.test_description = validated_data.get('test_description', instance.test_description)
             instance.time_for_test = validated_data.get('time_for_test', instance.time_for_test)
+            instance.possible_retries = validated_data.get('possible_retries', instance.possible_retries)
             instance.save()
             block.save()
         return instance
@@ -56,10 +72,11 @@ class AdminTestBlockSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
     tests = RawTestSerializer(source='questions' ,many=True)
     time_for_test = serializers.SerializerMethodField()
+    user_results = ShortTestSessionResultsSerializer(source='test_sessions', read_only=True, many=True)
 
     class Meta:
         model = TestBlock
-        fields = ['order','id', 'test_title', 'test_description','time_for_test' ,'tests']
+        fields = ['order','id', 'test_title', 'test_description','time_for_test','possible_retries', 'user_results' ,'tests']
 
     def get_order(self,obj):
         return obj.section.order
@@ -112,7 +129,7 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
                 TestAnswers.objects.create(test=question,**answer_data)
         return question
 
-#TODO understand
+
     @transaction.atomic
     def update(self, instance, validated_data):
         answers_data = validated_data.pop('test_answers', [])
@@ -142,4 +159,5 @@ class TestCreateUpdateSerializer(serializers.ModelSerializer):
                 if order not in orders:
                     answer.delete()
         return instance
+
 

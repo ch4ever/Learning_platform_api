@@ -3,7 +3,7 @@ from rest_framework import serializers
 from main.models import SiteUser
 from courses_app.serializers import CourseMiniSerializer
 
-#TODO CHECK
+
 class UserSerializer(serializers.ModelSerializer):
     courses = serializers.SerializerMethodField()
     class Meta:
