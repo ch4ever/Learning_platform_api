@@ -34,7 +34,6 @@ class TestSessionCreateView(APIView):
 
     def post(self, request, pk=None):
         test = get_object_or_404(TestBlock, pk=pk)
-        #TODO check
         course_id = test.section.section.course.id
         course = get_object_or_404(Course, id=course_id)
         check_object_permissions(self, request, course)

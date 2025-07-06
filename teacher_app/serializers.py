@@ -20,7 +20,6 @@ class ShortTestSessionResultsSerializer(serializers.ModelSerializer):
 
 class TestBlockGetUpdateSerializer(serializers.ModelSerializer):
     order = serializers.SerializerMethodField()
-    #TODO CHECK
     user_results = ShortTestSessionResultsSerializer(source='test_sessions', read_only=True, many=True)
 
     class Meta:

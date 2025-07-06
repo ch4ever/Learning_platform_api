@@ -22,7 +22,7 @@ class TestSession(models.Model):
         from datetime import timedelta
 
         if self.finished_at is not None:
-            return 0
+            return timedelta(seconds=0)
 
         end_time = self.started_at + self.test_block.time_for_test
         remaining_time = end_time - timezone.now()
